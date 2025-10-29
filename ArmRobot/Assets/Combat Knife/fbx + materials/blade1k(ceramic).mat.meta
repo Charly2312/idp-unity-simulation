@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: afb3f440691c2da4cbdc2fc050059a32
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 178655
+  packageName: Combat Knife
+  packageVersion: 1.0
+  assetPath: Assets/Combat Knife/fbx + materials/blade1k(ceramic).mat
+  uploadId: 389166
