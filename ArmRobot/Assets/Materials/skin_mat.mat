@@ -23,6 +23,10 @@ Material:
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
+    - _BaseMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _BumpMap:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -44,7 +48,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 10916, guid: 0000000000000000f000000000000000, type: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MetallicGlossMap:
@@ -65,8 +69,11 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _BleedSpread: 1.2
     - _BumpScale: 1
     - _Cutoff: 0.5
+    - _Darken: 0.5
+    - _Depth01: 0
     - _DepthPower: 1
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
@@ -78,17 +85,21 @@ Material:
     - _Mode: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.02
+    - _RedIntensity: 1
     - _Smoothness: 0.35
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _UVSec: 0
+    - _WoundIntensity: 1
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 1, g: 0.627451, b: 0.4784314, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
+    - _RedColor: {r: 1, g: 0.25, b: 0.25, a: 1}
     - _RedTint: {r: 0.7, g: 0, b: 0, a: 1}
+    - _SkinColor: {r: 0.9, g: 0.7, b: 0.6, a: 1}
     - _WoundColor: {r: 0.61635214, g: 0.025196673, b: 0.025196673, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

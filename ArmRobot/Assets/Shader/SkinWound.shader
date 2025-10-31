@@ -1,71 +1,71 @@
-Shader "Custom/SimpleSkinWound"
+Shader "Custom/SimpleSkinWoundBasic"
 {
     Properties
     {
-        _BaseMap ("Base Map", 2D) = "white" {}
-        _BaseColor ("Base Color", Color) = (1,1,1,1)
-
-        _WoundMask ("Wound Mask (RT)", 2D) = "black" {}   // filled by script
-        _RedColor ("Red Color", Color) = (1,0.25,0.25,1)
-        _RedIntensity ("Red Intensity", Range(0,1)) = 0.75
-        _Darken ("Darken Amount", Range(0,1)) = 0.5
-        _BleedSpread ("Mask Power", Range(0.5,3)) = 1.2   // >1 = more concentrated
-        _Depth01 ("Penetration 0..1", Range(0,1)) = 0     // fed by script
+        _MainTex ("Skin Texture", 2D) = "white" {}
+        _SkinColor ("Skin Color", Color) = (1, 0.627451, 0.4784314, 1)
+        _WoundMask ("Wound Mask", 2D) = "black" {}
+        _WoundColor ("Wound Color", Color) = (0.8, 0.1, 0.1, 1)
+        _WoundIntensity ("Wound Intensity", Range(0, 2)) = 1.0
     }
-
+    
     SubShader
     {
-        Tags { "RenderType"="Opaque" "RenderPipeline"="UniversalRenderPipeline" }
-        LOD 200
+        Tags { "RenderType"="Opaque" }
+        LOD 100
 
         Pass
         {
-            Name "Forward"
-            Tags{ "LightMode"="UniversalForward" }
-
-            HLSLPROGRAM
+            CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "UnityCG.cginc"
 
-            struct Attributes { float4 positionOS: POSITION; float2 uv:TEXCOORD0; };
-            struct Varyings  { float4 positionCS: SV_POSITION; float2 uv:TEXCOORD0; };
+            struct appdata
+            {
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+            };
 
-            TEXTURE2D(_BaseMap);       SAMPLER(sampler_BaseMap);
-            TEXTURE2D(_WoundMask);     SAMPLER(sampler_WoundMask);
+            struct v2f
+            {
+                float2 uv : TEXCOORD0;
+                float4 vertex : SV_POSITION;
+            };
 
-            CBUFFER_START(UnityPerMaterial)
-                float4 _BaseColor;
-                float4 _RedColor;
-                float   _RedIntensity;
-                float   _Darken;
-                float   _BleedSpread;
-                float   _Depth01;
-            CBUFFER_END
+            sampler2D _MainTex;
+            sampler2D _WoundMask;
+            fixed4 _SkinColor;
+            fixed4 _WoundColor;
+            float _WoundIntensity;
 
-            Varyings vert (Attributes v){
-                Varyings o;
-                VertexPositionInputs p = GetVertexPositionInputs(v.positionOS.xyz);
-                o.positionCS = p.positionCS;
+            v2f vert (appdata v)
+            {
+                v2f o;
+                o.vertex = UnityObjectToClipPos(v.vertex);
                 o.uv = v.uv;
                 return o;
             }
 
-            half4 frag (Varyings i):SV_Target
+            fixed4 frag (v2f i) : SV_Target
             {
-                float3 baseCol = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, i.uv).rgb * _BaseColor.rgb;
-
-                // wound mask (0..1), boosted by power and penetration
-                float m = SAMPLE_TEXTURE2D(_WoundMask, sampler_WoundMask, i.uv).r;
-                m = pow(saturate(m), _BleedSpread) * _Depth01;
-
-                // darken then add red tint
-                float3 darkened = lerp(baseCol, baseCol*(1.0 - _Darken), m);
-                float3 reddened = lerp(darkened, _RedColor.rgb, m * _RedIntensity);
-
-                return half4(reddened, 1);
+                // Sample base texture
+                fixed4 skin = tex2D(_MainTex, i.uv);
+                
+                // Apply skin color tint
+                skin *= _SkinColor;
+                
+                // Sample wound mask
+                fixed wound = tex2D(_WoundMask, i.uv).r;
+                wound *= _WoundIntensity;
+                
+                // Blend between skin and wound color
+                fixed3 finalColor = lerp(skin.rgb, _WoundColor.rgb, wound);
+                
+                return fixed4(finalColor, 1);
             }
-            ENDHLSL
+            ENDCG
         }
     }
+    FallBack "Diffuse"
 }

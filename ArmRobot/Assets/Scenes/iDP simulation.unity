@@ -132,7 +132,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 100567848}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d66a4021eae89a7439c59895b1482d96, type: 3}
   m_Name: 
@@ -595,6 +595,9 @@ GameObject:
   - component: {fileID: 1452672173}
   - component: {fileID: 1452672175}
   - component: {fileID: 1452672174}
+  - component: {fileID: 1452672176}
+  - component: {fileID: 1452672177}
+  - component: {fileID: 1452672178}
   m_Layer: 0
   m_Name: Skin
   m_TagString: Skin
@@ -625,7 +628,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 85df92d311ba24813a1e4ea89e96a712, type: 2}
+  - {fileID: 2100000, guid: 9148efd7cdb265a43b21cadac5f2d80c, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -664,7 +667,7 @@ Transform:
   m_GameObject: {fileID: 1452672168}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 55.054, y: 0.874, z: -2.095}
+  m_LocalPosition: {x: 55.054, y: 0.821, z: -2.095}
   m_LocalScale: {x: 0.7, y: 0.1, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -698,7 +701,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1452672168}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 438a310266270d2438f6238752466ab7, type: 3}
   m_Name: 
@@ -731,6 +734,104 @@ MeshCollider:
   m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &1452672176
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1452672168}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1d9e2804e5a1bd844b1b734ee4cd873e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  skinMaterial: {fileID: 2100000, guid: 9148efd7cdb265a43b21cadac5f2d80c, type: 2}
+  woundMask: {fileID: 8400000, guid: 223cbf3ad9e9431419a189335e0fea17, type: 2}
+  skinSurface: {fileID: 1452672172}
+  knifeTip: {fileID: 1994432560}
+  knifeBase: {fileID: 100567861}
+  maxIncisionDepth: 10
+  incisionWidth: 0.1
+  redIntensity: 1
+--- !u!114 &1452672177
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1452672168}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 295add6825a16fd4980535553bac75a2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  woundMask: {fileID: 8400000, guid: 223cbf3ad9e9431419a189335e0fea17, type: 2}
+  knifeTip: {fileID: 1994432560}
+--- !u!114 &1452672178
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1452672168}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 02b0f4d7756271141b971fb4f69b644d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  skinMaterial: {fileID: 2100000, guid: 9148efd7cdb265a43b21cadac5f2d80c, type: 2}
+  woundMask: {fileID: 8400000, guid: 223cbf3ad9e9431419a189335e0fea17, type: 2}
+  knifeTip: {fileID: 1994432560}
+--- !u!1 &1743388908
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1743388910}
+  - component: {fileID: 1743388909}
+  m_Layer: 0
+  m_Name: GameObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1743388909
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1743388908}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e93b03977a7befa47aeacc51fb104457, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  textureName: SkinTexture
+  skinColor: {r: 0.9, g: 0.7, b: 0.6, a: 1}
+  width: 4
+  height: 4
+  createOnStart: 1
+--- !u!4 &1743388910
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1743388908}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 54.89192, y: 1.10133, z: -2.09056}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1936935975 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -927199367670048503, guid: 3fba682e7b5a0444eb5e51e6fc772147,
@@ -783,8 +884,8 @@ Transform:
   m_GameObject: {fileID: 1994432559}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.001277, y: 0, z: -0.000265}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalPosition: {x: 0.00159, y: 0, z: 0.00014}
+  m_LocalScale: {x: 10, y: 10, z: 10}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 100567861}
@@ -884,3 +985,4 @@ SceneRoots:
   - {fileID: 968596145}
   - {fileID: 1452672172}
   - {fileID: 2055363711}
+  - {fileID: 1743388910}
