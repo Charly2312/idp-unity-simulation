@@ -1,18 +1,17 @@
-Shader "Custom/SimpleSkinWoundBasic"
+Shader "Custom/SkinWoundSimple"
 {
     Properties
     {
-        _MainTex ("Skin Texture", 2D) = "white" {}
-        _SkinColor ("Skin Color", Color) = (1, 0.627451, 0.4784314, 1)
-        _WoundMask ("Wound Mask", 2D) = "black" {}
-        _WoundColor ("Wound Color", Color) = (0.8, 0.1, 0.1, 1)
-        _WoundIntensity ("Wound Intensity", Range(0, 2)) = 1.0
+        _MainTex ("Base Texture", 2D) = "white" {}
+        _Color ("Tint Color", Color) = (1,1,1,1)
+        _WoundMask ("Wound Mask (R)", 2D) = "black" {}
+        _WoundColor ("Wound Color", Color) = (1,0,0,1)
+        _WoundIntensity ("Wound Intensity", Range(0,2)) = 1
     }
-    
     SubShader
     {
         Tags { "RenderType"="Opaque" }
-        LOD 100
+        LOD 200
 
         Pass
         {
@@ -28,41 +27,32 @@ Shader "Custom/SimpleSkinWoundBasic"
             };
 
             struct v2f
-            {
-                float2 uv : TEXCOORD0;
-                float4 vertex : SV_POSITION;
+            { 
+                float4 pos:SV_POSITION;
+                float2 uvMain:TEXCOORD0; 
+                float2 uvMask:TEXCOORD1;
             };
 
-            sampler2D _MainTex;
-            sampler2D _WoundMask;
-            fixed4 _SkinColor;
-            fixed4 _WoundColor;
+            sampler2D _MainTex, _WoundMask;
+            float4 _MainTex_ST;
+            fixed4 _Color, _WoundColor;
             float _WoundIntensity;
 
-            v2f vert (appdata v)
-            {
+            v2f vert(appdata v){
                 v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
+                o.pos = UnityObjectToClipPos(v.vertex);
+                o.uvMain = TRANSFORM_TEX(v.uv, _MainTex); // base uses its own tiling
+                o.uvMask = v.uv;                          // mask uses raw mesh UV (no tiling)
                 return o;
             }
 
-            fixed4 frag (v2f i) : SV_Target
+            fixed4 frag(v2f i):SV_Target
             {
-                // Sample base texture
-                fixed4 skin = tex2D(_MainTex, i.uv);
-                
-                // Apply skin color tint
-                skin *= _SkinColor;
-                
-                // Sample wound mask
-                fixed wound = tex2D(_WoundMask, i.uv).r;
-                wound *= _WoundIntensity;
-                
-                // Blend between skin and wound color
-                fixed3 finalColor = lerp(skin.rgb, _WoundColor.rgb, wound);
-                
-                return fixed4(finalColor, 1);
+                fixed4 baseC = tex2D(_MainTex, i.uvMain) * _Color;
+                float m = tex2D(_WoundMask, i.uvMask).r;  // decoupled from _MainTex tiling
+                float w = saturate(m * _WoundIntensity);
+                baseC.rgb = lerp(baseC.rgb, _WoundColor.rgb, w);
+                return baseC;
             }
             ENDCG
         }

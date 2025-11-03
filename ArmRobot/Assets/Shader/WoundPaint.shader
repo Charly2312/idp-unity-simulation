@@ -1,30 +1,70 @@
 Shader "Hidden/WoundPaint"
 {
-    Properties { _MainTex("Base",2D)="black"{} _BrushPos("BrushPos",Vector)=(0,0,0,0) _BrushRadius("Radius",Float)=0.02 _Strength("Strength",Range(0,1))=1 }
+    Properties
+    {
+        _MainTex ("Base", 2D) = "black" {}
+        _BrushPos ("Brush Position", Vector) = (0.5, 0.5, 0, 0)
+        _BrushRadius ("Brush Radius", Float) = 0.02
+        _Strength ("Strength", Range(0,1)) = 1
+    }
+    
     SubShader
     {
-        Tags{ "RenderType"="Opaque" "Queue"="Overlay" }
+        Tags { "RenderType"="Opaque" }
+        Cull Off ZWrite Off ZTest Always
+        
         Pass
         {
-            ZWrite Off Cull Off ZTest Always
-            HLSLPROGRAM
+            CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
             #include "UnityCG.cginc"
-            struct v2f { float4 pos:SV_POSITION; float2 uv:TEXCOORD0; };
-            v2f vert(uint id:SV_VertexID){ v2f o; o.uv=float2((id<<1)&2,id&2); o.pos=float4(o.uv*2-1,0,1); return o; }
-            sampler2D _MainTex; float4 _BrushPos; float _BrushRadius; float _Strength;
-            fixed4 frag(v2f i):SV_Target
+
+            struct appdata
             {
-                float2 uv=i.uv;
-                float cur = tex2D(_MainTex, uv).r;
-                float d = distance(uv, _BrushPos.xy);
-                float s = saturate(1 - smoothstep(_BrushRadius*0.6, _BrushRadius, d));
-                // max blend so wounds accumulate
-                float outv = max(cur, s * _Strength);
-                return fixed4(outv,outv,outv,1);
+                float4 vertex : POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            struct v2f
+            {
+                float2 uv : TEXCOORD0;
+                float4 vertex : SV_POSITION;
+            };
+
+            sampler2D _MainTex;
+            float4 _BrushPos;
+            float _BrushRadius;
+            float _Strength;
+
+            v2f vert (appdata v)
+            {
+                v2f o;
+                o.vertex = UnityObjectToClipPos(v.vertex);
+                o.uv = v.uv;
+                return o;
             }
-            ENDHLSL
+
+            fixed4 frag (v2f i) : SV_Target
+            {
+                // Sample existing mask
+                float src = tex2D(_MainTex, i.uv).r;
+
+                // Calculate distance from brush center
+                float2 delta = i.uv - _BrushPos.xy;
+                float dist = length(delta);
+                float normalizedDist = dist / max(0.000001, _BrushRadius);
+
+                // Soft circular brush with smoothstep falloff
+                float brush = saturate(1.0 - smoothstep(0.0, 1.0, normalizedDist));
+                brush *= _Strength;
+
+                // Accumulate (max so overlapping stamps don't reduce intensity)
+                float result = max(src, brush);
+
+                return float4(result, result, result, 1);
+            }
+            ENDCG
         }
     }
 }

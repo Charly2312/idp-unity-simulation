@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using static System.Net.Mime.MediaTypeNames;
 using Application = UnityEngine.Application;
 
 [ExecuteAlways]
@@ -8,7 +7,7 @@ public class WoundPainter : MonoBehaviour
     [Header("Mask")]
     public int MaskSize = 1024;         // RT resolution
     public float MaxDepthMm = 3f;       // depth that equals Depth01=1
-    public float BrushRadiusMm = 2f;    // radius of stain in mm
+    public float BrushRadiusMm = 20.0f;    // radius of stain in mm
     public bool PreviewUV = false;      // (unused here, for your own gizmos)
 
     [Header("Refs")]
@@ -26,9 +25,16 @@ public class WoundPainter : MonoBehaviour
     void Init()
     {
         if (!skinRenderer) skinRenderer = GetComponent<Renderer>();
-        if (skinRenderer && (_mat == null || !Application.isPlaying))
-            _mat = skinRenderer.sharedMaterial; // instance
+        if (skinRenderer)
+        {
+            _mat = Application.isPlaying ? skinRenderer.material : skinRenderer.sharedMaterial;
 
+            // Ensure the renderer actually uses the instance in play mode
+            if (Application.isPlaying) skinRenderer.material = _mat;
+        }
+        
+        Debug.Log($"WoundPainter Init: BrushRadiusMm={BrushRadiusMm}, BrushRadiusMeters={BrushRadiusMeters}");
+        
         if (_maskRT == null || _maskRT.width != MaskSize)
         {
             if (_maskRT) _maskRT.Release();
@@ -37,7 +43,19 @@ public class WoundPainter : MonoBehaviour
         }
 
         if (_mat) _mat.SetTexture("_WoundMask", _maskRT);
-        if (_paintMat == null) _paintMat = new Material(Shader.Find("Hidden/WoundPaint"));
+        if (_paintMat == null)
+        {
+            Shader brushShader = Shader.Find("Hidden/WoundPaint");
+            if (brushShader == null)
+            {
+                Debug.LogError("Hidden/WoundPaint shader NOT FOUND! Stamping will fail.");
+            }
+            else
+            {
+                _paintMat = new Material(brushShader);
+                Debug.Log("Hidden/WoundPaint shader loaded successfully");
+            }
+        }
 
         if (skin)
         {
@@ -46,7 +64,6 @@ public class WoundPainter : MonoBehaviour
         }
     }
 
-    // --- Public API ---
     public void SetDepthFromTip(Vector3 tipWorldPos, float maxDepthMeters)
     {
         if (!_mat || !skin) return;
@@ -60,26 +77,59 @@ public class WoundPainter : MonoBehaviour
     {
         if (!_paintMat || !_maskRT || !skin) return;
 
-        // convert world → skin local → uv (assumes Plane mesh scaled 1 with UV0 = XY in 0..1)
+        // convert world → skin local
         Vector3 local = skin.InverseTransformPoint(worldPos);
-        // map plane XY in [-0.5..0.5] to [0..1] (works for Unity Plane)
-        Vector2 uv = new Vector2(local.x + 0.5f, local.z + 0.5f);
 
+        float sizeX = 10f * Mathf.Abs(skin.lossyScale.x);
+        float sizeZ = 10f * Mathf.Abs(skin.lossyScale.z);
+
+        Vector2 uv = new Vector2(-local.x / 10f + 0.5f, -local.z / 10f + 0.5f);
+
+        float planeWorldX = 10f * Mathf.Abs(skin.lossyScale.x); // 10 * 0.7 = 7m
+        float planeWorldZ = 10f * Mathf.Abs(skin.lossyScale.z); // 10 * 0.5 = 5m
+        float avgWorld = (planeWorldX + planeWorldZ) * 0.5f;    // keep brush roughly circular
+        float rUV = Mathf.Abs(radiusMeters / Mathf.Max(1e-6f, avgWorld));
+
+        DoStampUV(uv, rUV, strength01);
+        Debug.Log($"World: {worldPos}, Local: ({local.x:F2}, {local.z:F2}), UV: ({uv.x:F3}, {uv.y:F3})");
+
+    }
+    public void StampAtUV(Vector2 uv, float radiusMeters, float strength01 = 1f)
+    {
+        if (!_paintMat || !_maskRT || !skin) return;
+
+        float planeWorldX = 10f * Mathf.Abs(skin.lossyScale.x);
+        float planeWorldZ = 10f * Mathf.Abs(skin.lossyScale.z);
+        float avgWorld = (planeWorldX + planeWorldZ) * 0.5f;
+        float rUV = Mathf.Abs(radiusMeters / Mathf.Max(1e-6f, avgWorld));
+
+        DoStampUV(uv, rUV, strength01);
+    }
+
+    void DoStampUV(Vector2 uv, float rUV, float strength01)
+    {
         _paintMat.SetTexture("_MainTex", _maskRT);
         _paintMat.SetVector("_BrushPos", new Vector4(uv.x, uv.y, 0, 0));
-
-        // convert radius from meters to uv (Unity Plane is 10x10 units by default; scaled 1 => 10m)
-        float planeMeters = 10f; // Unity Plane size
-        float rUV = Mathf.Abs(radiusMeters / planeMeters);
         _paintMat.SetFloat("_BrushRadius", rUV);
         _paintMat.SetFloat("_Strength", Mathf.Clamp01(strength01));
+        Debug.Log($"Shader params: _BrushPos=({uv.x:F3},{uv.y:F3}), _BrushRadius={rUV:F6}, _Strength={Mathf.Clamp01(strength01):F2}");
 
-        RenderTexture tmp = RenderTexture.GetTemporary(_maskRT.descriptor);
+        var tmp = RenderTexture.GetTemporary(_maskRT.descriptor);
         Graphics.Blit(_maskRT, tmp, _paintMat);
         Graphics.Blit(tmp, _maskRT);
         RenderTexture.ReleaseTemporary(tmp);
     }
 
+    void OnDisable()
+    {
+        if (_maskRT) { _maskRT.Release(); _maskRT = null; }
+        if (_paintMat)
+        {
+            if (Application.isPlaying) Destroy(_paintMat);
+            else DestroyImmediate(_paintMat);
+            _paintMat = null;
+        }
+    }
     // Helpers for your inspector units:
     public float MaxDepthMeters => MaxDepthMm / 1000f;
     public float BrushRadiusMeters => BrushRadiusMm / 1000f;

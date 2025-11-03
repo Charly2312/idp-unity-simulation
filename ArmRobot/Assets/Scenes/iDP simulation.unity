@@ -196,7 +196,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 0
+  m_Enabled: 1
   serializedVersion: 5
   m_Convex: 1
   m_CookingOptions: 30
@@ -228,6 +228,114 @@ Transform:
     type: 3}
   m_PrefabInstance: {fileID: 2055363711}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &287384219
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 287384220}
+  - component: {fileID: 287384223}
+  - component: {fileID: 287384222}
+  - component: {fileID: 287384221}
+  m_Layer: 0
+  m_Name: Sphere
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &287384220
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 287384219}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1994432560}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!135 &287384221
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 287384219}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.5
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!23 &287384222
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 287384219}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!33 &287384223
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 287384219}
+  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!1 &968596142
 GameObject:
   m_ObjectHideFlags: 0
@@ -240,8 +348,8 @@ GameObject:
   - component: {fileID: 968596144}
   - component: {fileID: 968596143}
   m_Layer: 0
-  m_Name: Camera
-  m_TagString: Untagged
+  m_Name: GameCamera
+  m_TagString: MainCamera
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -701,17 +809,17 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1452672168}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 438a310266270d2438f6238752466ab7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   MaskSize: 1024
   MaxDepthMm: 3
-  BrushRadiusMm: 2
+  BrushRadiusMm: 500
   PreviewUV: 0
   skinRenderer: {fileID: 1452672170}
-  skin: {fileID: 0}
+  skin: {fileID: 1452672172}
 --- !u!64 &1452672175
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -727,11 +835,11 @@ MeshCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 1
+  m_IsTrigger: 0
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 1
+  m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!114 &1452672176
@@ -775,7 +883,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1452672168}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 02b0f4d7756271141b971fb4f69b644d, type: 3}
   m_Name: 
@@ -793,8 +901,9 @@ GameObject:
   m_Component:
   - component: {fileID: 1743388910}
   - component: {fileID: 1743388909}
+  - component: {fileID: 1743388911}
   m_Layer: 0
-  m_Name: GameObject
+  m_Name: testController
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -832,6 +941,28 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1743388911
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1743388908}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 89e5c44ff43ab3e49b2e445e0b76ed66, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  CombatKnife: {fileID: 100567861}
+  KnifeTip: {fileID: 1994432560}
+  Skin: {fileID: 1452672172}
+  Cam: {fileID: 968596144}
+  Painter: {fileID: 1452672174}
+  HoverHeight: 0.5
+  DepthSpeed: 0.01
+  StampInterval: 0.03
+  StampStrength: 1
+  BladeCheckDistance: 0.5
 --- !u!1 &1936935975 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -927199367670048503, guid: 3fba682e7b5a0444eb5e51e6fc772147,
@@ -868,6 +999,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1994432560}
+  - component: {fileID: 1994432561}
   m_Layer: 0
   m_Name: KnifeTip
   m_TagString: Untagged
@@ -884,12 +1016,34 @@ Transform:
   m_GameObject: {fileID: 1994432559}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.00159, y: 0, z: 0.00014}
-  m_LocalScale: {x: 10, y: 10, z: 10}
+  m_LocalPosition: {x: 0.000995, y: 0.000007, z: -0.000024}
+  m_LocalScale: {x: 0.0001, y: 0.0001, z: 0.0001}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 287384220}
   m_Father: {fileID: 100567861}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &1994432561
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1994432559}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1001 &2055363711
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -904,11 +1058,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 400000, guid: 7b2383c948ac5a242873fb98b0e62a1f, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 55.02507
+      value: 55.0154
       objectReference: {fileID: 0}
     - target: {fileID: 400000, guid: 7b2383c948ac5a242873fb98b0e62a1f, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.113
+      value: 1.1232
       objectReference: {fileID: 0}
     - target: {fileID: 400000, guid: 7b2383c948ac5a242873fb98b0e62a1f, type: 3}
       propertyPath: m_LocalPosition.z
@@ -983,6 +1137,6 @@ SceneRoots:
   - {fileID: 1051411207}
   - {fileID: 1156264647}
   - {fileID: 968596145}
-  - {fileID: 1452672172}
   - {fileID: 2055363711}
   - {fileID: 1743388910}
+  - {fileID: 1452672172}
