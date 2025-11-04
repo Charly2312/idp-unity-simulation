@@ -11,7 +11,7 @@ using Debug = UnityEngine.Debug;
 public class SimpleKnifeMover : MonoBehaviour
 {
     // === Serial Communication ===
-    private string portName = "COM8";
+    private string portName = "COM10";
     public int baud = 115200;
     public int readTimeoutMs = 200;
 
@@ -60,11 +60,20 @@ public class SimpleKnifeMover : MonoBehaviour
 
     // === Serial Data Processing ===
     private const float MM_TO_M = 0.001f;
-    private Vector3 originPos = new Vector3(55.0154f, 1.1232f, -2.247592f);
+    private Vector3 originPos = new Vector3(55.0154f, 0.88f, -2.247592f);
     private Quaternion originRot;
     Vector3 accumMeters;
     private float prevX_mm, prevY_mm, prevZ_mm;
     private bool firstPacketReceived = false;
+
+    [Header("Rotation (Serial)")]
+    public bool useOriginRelativeRotation = true;  
+    [Range(0f, 1f)] public float rotationLerp = 0.5f; // 1 = snap, <1 = smooth Slerp per update
+    public float serialRotationScale = 1f;          // used only in incremental mode
+
+    // Track serial orientation
+    private float originYaw_deg, originPitch_deg, originRoll_deg; // from first packet
+    private float prevYaw_deg, prevPitch_deg, prevRoll_deg;       // for incremental mode
 
     void Start()
     {
@@ -105,7 +114,6 @@ public class SimpleKnifeMover : MonoBehaviour
 
     void InitializeSerialPort()
     {
-        // Debug.Log("Available Ports: " + string.Join(", ", SerialPort.GetPortNames()));
 
         sp = new SerialPort(portName, baud)
         {
@@ -149,77 +157,6 @@ public class SimpleKnifeMover : MonoBehaviour
         }
     }
 
-    // void ProcessSerialData()
-    // {
-    //     int n = 0;
-    //     while (n++ < 5 && inbox.TryDequeue(out var msg))
-    //     {
-    //         // Expected format: [x, y, z, yaw, pitch, roll]
-    //         string[] parts = msg.Trim('[', ']').Split(',');
-
-    //         if (parts.Length == 7)
-    //         {
-    //             try
-    //             {
-    //                 float x_mm = float.Parse(parts[0].Trim(), CultureInfo.InvariantCulture);
-    //                 float y_mm = float.Parse(parts[1].Trim(), CultureInfo.InvariantCulture);
-    //                 float z_mm = float.Parse(parts[2].Trim(), CultureInfo.InvariantCulture);
-    //                 float yaw = float.Parse(parts[3].Trim(), CultureInfo.InvariantCulture);
-    //                 float pitch = float.Parse(parts[4].Trim(), CultureInfo.InvariantCulture);
-    //                 float roll = float.Parse(parts[5].Trim(), CultureInfo.InvariantCulture);
-
-    //                 // Handle first packet
-    //                 if (!firstPacketReceived)
-    //                 {
-    //                     prevX_mm = x_mm;
-    //                     prevY_mm = y_mm;
-    //                     prevZ_mm = z_mm;
-    //                     firstPacketReceived = true;
-    //                     //Debug.Log($"First packet received: X={x_mm}, Y={y_mm}, Z={z_mm}");
-    //                     continue;
-    //                 }
-
-    //                 // Calculate delta position (difference from previous)
-    //                 float dx_mm = -(x_mm - prevX_mm);  // Inverted for coordinate system
-    //                 float dy_mm = y_mm - prevY_mm;
-    //                 float dz_mm = z_mm - prevZ_mm;
-
-    //                 // Update previous values
-    //                 prevX_mm = x_mm;
-    //                 prevY_mm = y_mm;
-    //                 prevZ_mm = z_mm;
-
-    //                 // Integrate as small steps (convert mm to meters and remap axes)
-    //                 // accumMeters += new Vector3(dx_mm, dy_mm, dz_mm) * MM_TO_M;                    
-    //                 // Update position based on accumulated movement
-    //                 Vector3 deltaUnity = new Vector3(
-    //                     dx_mm * MM_TO_M,   // Robot Y → Unity X
-    //                     dy_mm * MM_TO_M,   // Robot Z → Unity Y
-    //                     dz_mm * MM_TO_M    // Robot X → Unity Z
-    //                 );
-
-    //                 // Integrate as small steps
-    //                 accumMeters += deltaUnity;
-    //                 CombatKnife.position = originPos + accumMeters;
-    //                 //CombatKnife.Translate(accumMeters, Space.World);
-    //                 // Update rotation (if you want to use yaw, pitch, roll)
-    //                 // Vector3 offsEulerDeg = new Vector3(pitch, yaw, roll);
-    //                 // CombatKnife.rotation = originRot * Quaternion.Euler(offsEulerDeg);
-
-    //                 //Debug.Log($"Serial Move - Delta: ({dx_mm:F2}, {dy_mm:F2}, {dz_mm:F2}) mm | Position: {CombatKnife.position}");
-    //             }
-    //             catch (FormatException e)
-    //             {
-    //                 //Debug.LogError($"Error parsing message: {msg}. Exception: {e.Message}");
-    //             }
-    //         }
-    //         else
-    //         {
-    //             //Debug.LogWarning($"Invalid message format. Expected 6 values, got {parts.Length}: {msg}");
-    //         }
-    //     }
-    // }
-
     void ProcessSerialData()
     {
         // Drain queue and keep only the most recent message
@@ -235,16 +172,36 @@ public class SimpleKnifeMover : MonoBehaviour
         if (!float.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var x_mm)) return;
         if (!float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var y_mm)) return;
         if (!float.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var z_mm)) return;
-        if (!float.TryParse(parts[3].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var yaw)) return;
-        if (!float.TryParse(parts[4].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var pitch)) return;
-        if (!float.TryParse(parts[5].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var roll)) return;
+        // if (!float.TryParse(parts[3].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var yaw)) return;
+        // if (!float.TryParse(parts[4].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var pitch)) return;
+        // if (!float.TryParse(parts[5].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var roll)) return;
+
+        // Parse orientation (radians) → convert to degrees
+        if (!float.TryParse(parts[3].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var yawRad)) return;
+        if (!float.TryParse(parts[4].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var pitchRad)) return;
+        if (!float.TryParse(parts[5].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rollRad)) return;
+
+        // Radians -> Degrees
+        float yaw   = yawRad   * Mathf.Rad2Deg;
+        float pitch = pitchRad * Mathf.Rad2Deg;
+        float roll  = rollRad  * Mathf.Rad2Deg;
+        // roll isnt working well 
+        Debug.Log(    $"x={x_mm:F2} y={y_mm:F2} z={z_mm:F2} mm | " +
+                      $"yaw={yawRad:F3} pitch={pitchRad:F3} roll={rollRad:F3} rad | " +
+                      $"yaw={yaw:F1} pitch={pitch:F1} roll={roll:F1} deg");
 
         if (!firstPacketReceived)
         {
+            // translation
             prevX_mm = x_mm; prevY_mm = y_mm; prevZ_mm = z_mm;
+            accumMeters = Vector3.zero;
             // Use current knife position as origin to avoid big offsets
             if (Scalpel) { originPos = Scalpel.position; originRot = Scalpel.rotation; }
-            accumMeters = Vector3.zero;
+
+            // rotation
+            originYaw_deg = yaw; originPitch_deg = pitch; originRoll_deg = roll;
+            prevYaw_deg = yaw; prevPitch_deg = pitch; prevRoll_deg = roll;
+          
             firstPacketReceived = true;
             return;
         }
@@ -265,9 +222,30 @@ public class SimpleKnifeMover : MonoBehaviour
         accumMeters += deltaUnity;
         if (Scalpel) Scalpel.position = originPos + accumMeters;
 
-        // After parsing pitch, yaw, roll from serial data:
-        Quaternion offsetRot = Quaternion.Euler(pitch, yaw, roll);
-        Scalpel.rotation = originRot * offsetRot;
+        if (Scalpel)
+        {
+            if (useOriginRelativeRotation)
+            {
+                // Map absolute serial pose relative to first packet (no drift, “home” behavior)
+                float offYaw   = Mathf.DeltaAngle(originYaw_deg,   yaw);
+                float offPitch = Mathf.DeltaAngle(originPitch_deg, pitch);
+                float offRoll  = Mathf.DeltaAngle(originRoll_deg,  roll);
+
+                Quaternion target = originRot * Quaternion.Euler(offPitch, offYaw, offRoll);
+                Scalpel.rotation = rotationLerp >= 1f
+                    ? target
+                    : Quaternion.Slerp(Scalpel.rotation, target, rotationLerp);
+            }
+            else
+            {
+                float dYaw   = Mathf.DeltaAngle(prevYaw_deg,   yaw)   * serialRotationScale;
+                float dPitch = Mathf.DeltaAngle(prevPitch_deg, pitch) * serialRotationScale;
+                float dRoll  = Mathf.DeltaAngle(prevRoll_deg,  roll)  * serialRotationScale;
+
+                prevYaw_deg = yaw; prevPitch_deg = pitch; prevRoll_deg = roll;
+                Scalpel.Rotate(new Vector3(dPitch, dYaw, dRoll), Space.Self);
+            }
+        }
 
         PaintWound();
     }
@@ -372,8 +350,8 @@ public class SimpleKnifeMover : MonoBehaviour
         if (!ScalpelTip || !Skin) return;
         if (!Cam) Cam = Camera.main;
 
-        ManualKeyboardControl();
-        //ProcessSerialData();
+        // ManualKeyboardControl();
+        ProcessSerialData();
     }
 
 }
