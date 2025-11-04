@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO.Ports;
 using System.Text;
 using System.Threading;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 public class SimpleKnifeMover : MonoBehaviour
 {
@@ -23,7 +25,7 @@ public class SimpleKnifeMover : MonoBehaviour
 
     public Transform Skin;           // Assign your Skin plane
     public Camera Cam;               // Leave empty to use Camera.main
-    public WoundPainter Painter; 
+    public WoundPainter Painter;
 
     // === Movement Settings ===
     public bool UseSerialInput = true;   // Toggle between serial and keyboard control
@@ -33,16 +35,16 @@ public class SimpleKnifeMover : MonoBehaviour
     public float StampInterval = 0.1f; // seconds between paint stamps
     public float StampStrength = 1f;
     public float MaxDepth = 0.0424f; // Maximum depth in meters (42.4mm)
-    
+
     [Header("Skin Surface Detection")]
     public bool AutoDetectSkinSurface = true; // Auto-detect from Skin object position
     public float SkinSurfaceY = 0.8764f; // Manual override if AutoDetect is false
-    
+
     [Header("Gradient Settings")]
     public float InnerRadiusPercent = 0.5f; // Inner radius as percentage of brush radius (darker red)
     public float InnerStrengthMultiplier = 1.0f; // Multiplier for inner region
     public float OuterStrengthMultiplier = 0.5f; // Multiplier for outer region (lighter)
-    
+
     [Header("Debug")]
     public float DepthThreshold = 0.001f; // Minimum depth to consider "cutting" (1mm)
 
@@ -68,7 +70,7 @@ public class SimpleKnifeMover : MonoBehaviour
         var skinGO = GameObject.FindGameObjectWithTag("Skin");
         if (skinGO) skinTf = skinGO.transform;
         if (!Skin && skinTf) Skin = skinTf;
-        
+
         // Auto-detect or use manual value
         if (AutoDetectSkinSurface && Skin != null)
         {
@@ -80,7 +82,7 @@ public class SimpleKnifeMover : MonoBehaviour
             _actualSkinSurfaceY = SkinSurfaceY;
             Debug.Log($"Using manual Skin Surface Y: {_actualSkinSurfaceY:F4} units");
         }
-        
+
         Debug.Log($"=== INITIALIZATION ===");
         Debug.Log($"Skin position: {Skin.position}");
         Debug.Log($"KnifeTip position: {KnifeTip.position}");
@@ -130,7 +132,8 @@ public class SimpleKnifeMover : MonoBehaviour
             try
             {
                 string line = sp.ReadLine();
-                if (!string.IsNullOrWhiteSpace(line)) {
+                if (!string.IsNullOrWhiteSpace(line))
+                {
                     // Debug.Log($"📥 RAW RECEIVED: '{line.Trim()}'");
                     inbox.Enqueue(line.Trim());
                 }
@@ -227,93 +230,24 @@ public class SimpleKnifeMover : MonoBehaviour
         if (!float.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var x_mm)) return;
         if (!float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var y_mm)) return;
         if (!float.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var z_mm)) return;
-        // yaw/pitch/roll optional
-        // if (!float.TryParse(parts[3]...)) ...
+        if (!float.TryParse(parts[3].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var yaw)) return;
+        if (!float.TryParse(parts[4].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var pitch)) return;
+        if (!float.TryParse(parts[5].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var roll)) return;
 
         if (!firstPacketReceived)
         {
-<<<<<<< HEAD
-            // Expected format: [x, y, z, yaw, pitch, roll]
-            string[] parts = msg.Trim('[', ']').Split(',');
-
-            if (parts.Length == 7)
-            {
-                try
-                {
-                    float x_mm = float.Parse(parts[0].Trim(), CultureInfo.InvariantCulture);
-                    float y_mm = float.Parse(parts[1].Trim(), CultureInfo.InvariantCulture);
-                    float z_mm = float.Parse(parts[2].Trim(), CultureInfo.InvariantCulture);
-                    float yaw = float.Parse(parts[3].Trim(), CultureInfo.InvariantCulture);
-                    float pitch = float.Parse(parts[4].Trim(), CultureInfo.InvariantCulture);
-                    float roll = float.Parse(parts[5].Trim(), CultureInfo.InvariantCulture);
-
-                    // Handle first packet
-                    if (!firstPacketReceived)
-                    {
-                        prevX_mm = x_mm;
-                        prevY_mm = y_mm;
-                        prevZ_mm = z_mm;
-                        firstPacketReceived = true;
-                        //Debug.Log($"First packet received: X={x_mm}, Y={y_mm}, Z={z_mm}");
-                        continue;
-                    }
-
-                    // Calculate delta position (difference from previous)
-                    float dx_mm = -(x_mm - prevX_mm);  // Inverted for coordinate system
-                    float dy_mm = y_mm - prevY_mm;
-                    float dz_mm = z_mm - prevZ_mm;
-
-                    // Update previous values
-                    prevX_mm = x_mm;
-                    prevY_mm = y_mm;
-                    prevZ_mm = z_mm;
-
-                    // Integrate as small steps (convert mm to meters and remap axes)
-                    // accumMeters += new Vector3(dx_mm, dy_mm, dz_mm) * MM_TO_M;                    
-                    // Update position based on accumulated movement
-                    Vector3 deltaUnity = new Vector3(
-                        dx_mm * MM_TO_M,   // Robot Y → Unity X
-                        dy_mm * MM_TO_M,   // Robot Z → Unity Y
-                        dz_mm * MM_TO_M    // Robot X → Unity Z
-                    );
-
-                    // Integrate as small steps
-                    accumMeters += deltaUnity;
-                    CombatKnife.position = originPos + accumMeters;
-
-
-                    // --- Apply rotation from yaw, pitch, roll ---
-                    // If your device sends degrees, use as is. If radians, convert to degrees.
-                    // Adjust the order if your coordinate system differs.
-                    Quaternion rot = originRot * Quaternion.Euler(pitch, yaw, roll);
-                    CombatKnife.rotation = rot;
-
-                    //Debug.Log($"Serial Move - Delta: ({dx_mm:F2}, {dy_mm:F2}, {dz_mm:F2}) mm | Position: {CombatKnife.position}");
-                    PaintWound();
-                }
-                catch (FormatException e)
-                {
-                    //Debug.LogError($"Error parsing message: {msg}. Exception: {e.Message}");
-                }
-            }
-            else
-            {
-                //Debug.LogWarning($"Invalid message format. Expected 6 values, got {parts.Length}: {msg}");
-            }
-=======
             prevX_mm = x_mm; prevY_mm = y_mm; prevZ_mm = z_mm;
             // Use current knife position as origin to avoid big offsets
             if (CombatKnife) { originPos = CombatKnife.position; originRot = CombatKnife.rotation; }
             accumMeters = Vector3.zero;
             firstPacketReceived = true;
             return;
->>>>>>> dc96f90d3072be387632cef2a98930305639f391
         }
 
         // Compute deltas (mm)
         float dx_mm = -(x_mm - prevX_mm);
-        float dy_mm =  (y_mm - prevY_mm);
-        float dz_mm =  (z_mm - prevZ_mm);
+        float dy_mm = (y_mm - prevY_mm);
+        float dz_mm = (z_mm - prevZ_mm);
         prevX_mm = x_mm; prevY_mm = y_mm; prevZ_mm = z_mm;
 
         // Map robot → Unity axes (tune if needed)
@@ -325,27 +259,34 @@ public class SimpleKnifeMover : MonoBehaviour
 
         accumMeters += deltaUnity;
         if (CombatKnife) CombatKnife.position = originPos + accumMeters;
+
+        // After parsing pitch, yaw, roll from serial data:
+        Quaternion offsetRot = Quaternion.Euler(pitch, yaw, roll);
+        CombatKnife.rotation = originRot * offsetRot;
+
+        PaintWound();
     }
 
-    void ManualKeyboardControl() {
+    void ManualKeyboardControl()
+    {
         // Keyboard movement controls
         Vector3 movement = Vector3.zero;
-        
+
         // A/D - Left/Right
         if (Input.GetKey(KeyCode.A)) movement.x -= 1f;
         if (Input.GetKey(KeyCode.D)) movement.x += 1f;
-        
+
         // W/S - Up/Down
         if (Input.GetKey(KeyCode.W)) movement.y += 1f;
         if (Input.GetKey(KeyCode.S)) movement.y -= 1f;
-        
+
         // Q/E - Forward/Backward
         if (Input.GetKey(KeyCode.Q)) movement.z -= 1f;
         if (Input.GetKey(KeyCode.E)) movement.z += 1f;
-        
+
         // Apply movement
         CombatKnife.Translate(movement * moveSpeed * Time.deltaTime, Space.World);
-        
+
         // Rotation controls (optional)
         float yaw = 0f, pitch = 0f, roll = 0f;
         if (Input.GetKey(KeyCode.J)) yaw = -1f;
@@ -360,7 +301,8 @@ public class SimpleKnifeMover : MonoBehaviour
         PaintWound();
     }
 
-    void PaintWound() {
+    void PaintWound()
+    {
         // Automatically check depth and paint wound
         if (Painter)
         {
@@ -369,7 +311,7 @@ public class SimpleKnifeMover : MonoBehaviour
             float knifeTipY = KnifeTip.position.y;
             float rawDepth = 0.8764f - knifeTipY;
             float actualDepth = Mathf.Max(0f, rawDepth); // Only clamp negative values to 0
-            
+
             string status = rawDepth < 0 ? "ABOVE SKIN (in air)" : "BELOW SKIN (CUTTING)";
             //Debug.Log($"KnifeTip Y: {knifeTipY:F4} | Skin Surface: {0.8764} | Raw Depth: {rawDepth:F4} | Actual Depth: {actualDepth:F4} | {status}");
 
@@ -379,36 +321,36 @@ public class SimpleKnifeMover : MonoBehaviour
                 // Calculate depth percentage (0 to 1) for color intensity
                 // Don't clamp actualDepth to MaxDepth - use full raw depth value
                 float depthPercent = Mathf.Clamp01(actualDepth / MaxDepth);
-                
+
                 // Update depth color based on actual depth
                 Painter.SetDepthFromTip(KnifeTip.position, Painter.MaxDepthMeters);
-                
+
                 // Project knife tip position onto skin plane to get UV
                 Plane skinPlane = new Plane(Skin.up, Skin.position);
                 Vector3 projectedPos = skinPlane.ClosestPointOnPlane(KnifeTip.position);
-                
+
                 float u = 1f - ((projectedPos.x - _skinMin.x) / (_skinMax.x - _skinMin.x));
                 float v = 1f - ((projectedPos.z - _skinMin.y) / (_skinMax.y - _skinMin.y) + 0.2f);
-                
+
                 Vector2 uv = new Vector2(u, v);
-                
+
                 _stampTimer += Time.deltaTime;
                 if (_stampTimer >= StampInterval)
                 {
                     _stampTimer = 0f;
-                    
+
                     // Paint two circles: inner (darker) and outer (lighter)
                     float fullRadius = Painter.BrushRadiusMeters;
                     float innerRadius = fullRadius * InnerRadiusPercent;
-                    
+
                     // Paint inner circle (darker red) - strength increases with depth
                     float innerStrength = StampStrength * depthPercent * InnerStrengthMultiplier;
                     Painter.StampAtUV(uv, innerRadius, innerStrength);
-                    
+
                     // Paint outer circle (lighter red) - strength increases with depth
                     float outerStrength = StampStrength * depthPercent * OuterStrengthMultiplier;
                     Painter.StampAtUV(uv, fullRadius, outerStrength);
-                    
+
                     //Debug.Log($"🔴 AUTO-STAMPED at UV ({u:F3}, {v:F3}) | Depth: {actualDepth:F4} ({depthPercent * 100f:F0}%) | Inner: {innerStrength:F2}, Outer: {outerStrength:F2}");
                 }
             }
@@ -419,7 +361,7 @@ public class SimpleKnifeMover : MonoBehaviour
             }
         }
     }
-    
+
     void Update()
     {
         if (!KnifeTip || !Skin) return;
@@ -428,5 +370,5 @@ public class SimpleKnifeMover : MonoBehaviour
         ManualKeyboardControl();
         //ProcessSerialData();
     }
-       
+
 }
