@@ -15,6 +15,10 @@ public class SimpleKnifeMover : MonoBehaviour
     public float StampStrength = 1f;
     public float BladeCheckDistance = 0.5f; // raycast distance from blade
 
+    // Manual UV mapping based on skin vertices
+    private Vector2 _skinMin = new Vector2(54.69f, -2.26f); // (minX, minZ)
+    private Vector2 _skinMax = new Vector2(55.42f, -1.74f); // (maxX, maxZ)
+
     float _currentDepth = 0f;
     float _stampTimer = 0f;
 
@@ -47,30 +51,34 @@ public class SimpleKnifeMover : MonoBehaviour
                 
                 if (Physics.Raycast(bladeRay, out RaycastHit bladeHit, BladeCheckDistance))
                 {
+                    //(0.51, 0.94) bottom middle
+                    //(0.95, 0.50) middle left
+                    //middle is (0.5, 0.5)
+                    //from middle to left edge is 0.44
+                    //from middle to bottom is 0.44
                     if (bladeHit.transform == Skin || bladeHit.transform.IsChildOf(Skin))
                     {
                         Debug.DrawLine(bladePos, bladeHit.point, Color.red, 0.1f);
                         
-                        // Stamp at the blade intersection point
-                        if (bladeHit.collider is MeshCollider && bladeHit.textureCoord != Vector2.zero)
+                        // Manual UV calculation from world position
+                        Vector3 worldPos = bladeHit.point;
+                        
+                        // Map world X to U (normalize to 0-1)
+                        float u = 1f-((worldPos.x - _skinMin.x) / (_skinMax.x - _skinMin.x));
+                        
+                        // Map world Z to V (normalize to 0-1)
+                        float v = 1f -((worldPos.z - _skinMin.y) / (_skinMax.y - _skinMin.y));
+                        
+                        Vector2 uv = new Vector2(u, v);
+                        
+                        Debug.Log($"World pos: ({worldPos.x:F2}, {worldPos.z:F2}), Calculated UV: ({u:F3}, {v:F3})");
+                        
+                        _stampTimer += Time.deltaTime;
+                        if (_stampTimer >= StampInterval)
                         {
-                            Vector2 rawUV = bladeHit.textureCoord;
-                            Debug.Log($"Raw UV from mesh: {rawUV}, Hit world pos: {bladeHit.point}");
-                            
-                            // Try different UV mappings to fix scaling:
-                            Vector2 uv = rawUV; // Start with no modification
-                            
-                            // If scaling is wrong, try these one at a time:
-                            // uv = new Vector2(rawUV.x * 2f, rawUV.y * 2f); // Scale up 2x
-                            // uv = new Vector2(rawUV.x * 0.5f, rawUV.y * 0.5f); // Scale down 2x
-                            
-                            _stampTimer += Time.deltaTime;
-                            if (_stampTimer >= StampInterval)
-                            {
-                                _stampTimer = 0f;
-                                Painter.StampAtUV(uv, Painter.BrushRadiusMeters, StampStrength);
-                                Debug.Log($"STAMPED with UV {uv} (from raw {rawUV})");
-                            }
+                            _stampTimer = 0f;
+                            Painter.StampAtUV(uv, Painter.BrushRadiusMeters, StampStrength);
+                            Debug.Log($"STAMPED at calculated UV ({u:F3}, {v:F3})");
                         }
                     }
                 }

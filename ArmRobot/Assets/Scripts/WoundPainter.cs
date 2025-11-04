@@ -98,12 +98,15 @@ public class WoundPainter : MonoBehaviour
     {
         if (!_paintMat || !_maskRT || !skin) return;
 
-        float planeWorldX = 10f * Mathf.Abs(skin.lossyScale.x);
-        float planeWorldZ = 10f * Mathf.Abs(skin.lossyScale.z);
-        float avgWorld = (planeWorldX + planeWorldZ) * 0.5f;
-        float rUV = Mathf.Abs(radiusMeters / Mathf.Max(1e-6f, avgWorld));
+    // Calculate radius in UV space
+    float planeWorldX = 10f * Mathf.Abs(skin.lossyScale.x);
+    float planeWorldZ = 10f * Mathf.Abs(skin.lossyScale.z);
+    float avgWorld = (planeWorldX + planeWorldZ) * 0.5f;
+    float rUV = Mathf.Abs(radiusMeters / Mathf.Max(1e-6f, avgWorld));
 
-        DoStampUV(uv, rUV, strength01);
+    // Use UV directly without any transformation
+    DoStampUV(uv, rUV, strength01);
+    Debug.Log($"StampAtUV: UV=({uv.x:F3},{uv.y:F3}), radiusMeters={radiusMeters:F4}, rUV={rUV:F6}");
     }
 
     void DoStampUV(Vector2 uv, float rUV, float strength01)
