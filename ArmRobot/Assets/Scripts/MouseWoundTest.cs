@@ -141,75 +141,120 @@ public class SimpleKnifeMover : MonoBehaviour
         }
     }
 
+    // void ProcessSerialData()
+    // {
+    //     int n = 0;
+    //     while (n++ < 5 && inbox.TryDequeue(out var msg))
+    //     {
+    //         // Expected format: [x, y, z, yaw, pitch, roll]
+    //         string[] parts = msg.Trim('[', ']').Split(',');
+
+    //         if (parts.Length == 7)
+    //         {
+    //             try
+    //             {
+    //                 float x_mm = float.Parse(parts[0].Trim(), CultureInfo.InvariantCulture);
+    //                 float y_mm = float.Parse(parts[1].Trim(), CultureInfo.InvariantCulture);
+    //                 float z_mm = float.Parse(parts[2].Trim(), CultureInfo.InvariantCulture);
+    //                 float yaw = float.Parse(parts[3].Trim(), CultureInfo.InvariantCulture);
+    //                 float pitch = float.Parse(parts[4].Trim(), CultureInfo.InvariantCulture);
+    //                 float roll = float.Parse(parts[5].Trim(), CultureInfo.InvariantCulture);
+
+    //                 // Handle first packet
+    //                 if (!firstPacketReceived)
+    //                 {
+    //                     prevX_mm = x_mm;
+    //                     prevY_mm = y_mm;
+    //                     prevZ_mm = z_mm;
+    //                     firstPacketReceived = true;
+    //                     //Debug.Log($"First packet received: X={x_mm}, Y={y_mm}, Z={z_mm}");
+    //                     continue;
+    //                 }
+
+    //                 // Calculate delta position (difference from previous)
+    //                 float dx_mm = -(x_mm - prevX_mm);  // Inverted for coordinate system
+    //                 float dy_mm = y_mm - prevY_mm;
+    //                 float dz_mm = z_mm - prevZ_mm;
+
+    //                 // Update previous values
+    //                 prevX_mm = x_mm;
+    //                 prevY_mm = y_mm;
+    //                 prevZ_mm = z_mm;
+
+    //                 // Integrate as small steps (convert mm to meters and remap axes)
+    //                 // accumMeters += new Vector3(dx_mm, dy_mm, dz_mm) * MM_TO_M;                    
+    //                 // Update position based on accumulated movement
+    //                 Vector3 deltaUnity = new Vector3(
+    //                     dx_mm * MM_TO_M,   // Robot Y → Unity X
+    //                     dy_mm * MM_TO_M,   // Robot Z → Unity Y
+    //                     dz_mm * MM_TO_M    // Robot X → Unity Z
+    //                 );
+
+    //                 // Integrate as small steps
+    //                 accumMeters += deltaUnity;
+    //                 CombatKnife.position = originPos + accumMeters;
+    //                 //CombatKnife.Translate(accumMeters, Space.World);
+    //                 // Update rotation (if you want to use yaw, pitch, roll)
+    //                 // Vector3 offsEulerDeg = new Vector3(pitch, yaw, roll);
+    //                 // CombatKnife.rotation = originRot * Quaternion.Euler(offsEulerDeg);
+
+    //                 //Debug.Log($"Serial Move - Delta: ({dx_mm:F2}, {dy_mm:F2}, {dz_mm:F2}) mm | Position: {CombatKnife.position}");
+    //             }
+    //             catch (FormatException e)
+    //             {
+    //                 //Debug.LogError($"Error parsing message: {msg}. Exception: {e.Message}");
+    //             }
+    //         }
+    //         else
+    //         {
+    //             //Debug.LogWarning($"Invalid message format. Expected 6 values, got {parts.Length}: {msg}");
+    //         }
+    //     }
+    // }
+
     void ProcessSerialData()
     {
-        int n = 0;
-        while (n++ < 5 && inbox.TryDequeue(out var msg))
+        // Drain queue and keep only the most recent message
+        string last = null;
+        while (inbox.TryDequeue(out var msg)) last = msg;
+        if (string.IsNullOrEmpty(last)) return;
+
+        // Expected: [x, y, z, yaw, pitch, roll, ...]
+        var parts = last.Trim('[', ']').Split(',');
+        if (parts.Length < 6) return;
+
+        // Fast, allocation-light parsing
+        if (!float.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var x_mm)) return;
+        if (!float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var y_mm)) return;
+        if (!float.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var z_mm)) return;
+        // yaw/pitch/roll optional
+        // if (!float.TryParse(parts[3]...)) ...
+
+        if (!firstPacketReceived)
         {
-            // Expected format: [x, y, z, yaw, pitch, roll]
-            string[] parts = msg.Trim('[', ']').Split(',');
-
-            if (parts.Length == 7)
-            {
-                try
-                {
-                    float x_mm = float.Parse(parts[0].Trim(), CultureInfo.InvariantCulture);
-                    float y_mm = float.Parse(parts[1].Trim(), CultureInfo.InvariantCulture);
-                    float z_mm = float.Parse(parts[2].Trim(), CultureInfo.InvariantCulture);
-                    float yaw = float.Parse(parts[3].Trim(), CultureInfo.InvariantCulture);
-                    float pitch = float.Parse(parts[4].Trim(), CultureInfo.InvariantCulture);
-                    float roll = float.Parse(parts[5].Trim(), CultureInfo.InvariantCulture);
-
-                    // Handle first packet
-                    if (!firstPacketReceived)
-                    {
-                        prevX_mm = x_mm;
-                        prevY_mm = y_mm;
-                        prevZ_mm = z_mm;
-                        firstPacketReceived = true;
-                        //Debug.Log($"First packet received: X={x_mm}, Y={y_mm}, Z={z_mm}");
-                        continue;
-                    }
-
-                    // Calculate delta position (difference from previous)
-                    float dx_mm = -(x_mm - prevX_mm);  // Inverted for coordinate system
-                    float dy_mm = y_mm - prevY_mm;
-                    float dz_mm = z_mm - prevZ_mm;
-
-                    // Update previous values
-                    prevX_mm = x_mm;
-                    prevY_mm = y_mm;
-                    prevZ_mm = z_mm;
-
-                    // Integrate as small steps (convert mm to meters and remap axes)
-                    // accumMeters += new Vector3(dx_mm, dy_mm, dz_mm) * MM_TO_M;                    
-                    // Update position based on accumulated movement
-                    Vector3 deltaUnity = new Vector3(
-                        dx_mm * MM_TO_M,   // Robot Y → Unity X
-                        dy_mm * MM_TO_M,   // Robot Z → Unity Y
-                        dz_mm * MM_TO_M    // Robot X → Unity Z
-                    );
-
-                    // Integrate as small steps
-                    accumMeters += deltaUnity;
-                    CombatKnife.position = originPos + accumMeters;
-                    //CombatKnife.Translate(accumMeters, Space.World);
-                    // Update rotation (if you want to use yaw, pitch, roll)
-                    // Vector3 offsEulerDeg = new Vector3(pitch, yaw, roll);
-                    // CombatKnife.rotation = originRot * Quaternion.Euler(offsEulerDeg);
-
-                    //Debug.Log($"Serial Move - Delta: ({dx_mm:F2}, {dy_mm:F2}, {dz_mm:F2}) mm | Position: {CombatKnife.position}");
-                }
-                catch (FormatException e)
-                {
-                    //Debug.LogError($"Error parsing message: {msg}. Exception: {e.Message}");
-                }
-            }
-            else
-            {
-                //Debug.LogWarning($"Invalid message format. Expected 6 values, got {parts.Length}: {msg}");
-            }
+            prevX_mm = x_mm; prevY_mm = y_mm; prevZ_mm = z_mm;
+            // Use current knife position as origin to avoid big offsets
+            if (CombatKnife) { originPos = CombatKnife.position; originRot = CombatKnife.rotation; }
+            accumMeters = Vector3.zero;
+            firstPacketReceived = true;
+            return;
         }
+
+        // Compute deltas (mm)
+        float dx_mm = -(x_mm - prevX_mm);
+        float dy_mm =  (y_mm - prevY_mm);
+        float dz_mm =  (z_mm - prevZ_mm);
+        prevX_mm = x_mm; prevY_mm = y_mm; prevZ_mm = z_mm;
+
+        // Map robot → Unity axes (tune if needed)
+        Vector3 deltaUnity = new Vector3(
+            dy_mm * MM_TO_M,   // Robot Y → Unity X
+            dz_mm * MM_TO_M,   // Robot Z → Unity Y
+            dx_mm * MM_TO_M    // Robot X → Unity Z
+        );
+
+        accumMeters += deltaUnity;
+        if (CombatKnife) CombatKnife.position = originPos + accumMeters;
     }
 
     void ManualKeyboardControl() {
