@@ -56,7 +56,7 @@ public class SimpleKnifeMover : MonoBehaviour
 
     // === Serial Data Processing ===
     private const float MM_TO_M = 0.001f;
-    private Vector3 originPos = new Vector3(1.1232f, -2.247592f, 55.0154f);
+    private Vector3 originPos = new Vector3(55.0154f, 1.1232f, -2.247592f);
     private Quaternion originRot;
     Vector3 accumMeters;
     private float prevX_mm, prevY_mm, prevZ_mm;
@@ -98,7 +98,7 @@ public class SimpleKnifeMover : MonoBehaviour
 
     void InitializeSerialPort()
     {
-        Debug.Log("Available Ports: " + string.Join(", ", SerialPort.GetPortNames()));
+        // Debug.Log("Available Ports: " + string.Join(", ", SerialPort.GetPortNames()));
 
         sp = new SerialPort(portName, baud)
         {
@@ -131,7 +131,7 @@ public class SimpleKnifeMover : MonoBehaviour
             {
                 string line = sp.ReadLine();
                 if (!string.IsNullOrWhiteSpace(line)) {
-                    Debug.Log($"📥 RAW RECEIVED: '{line.Trim()}'");
+                    // Debug.Log($"📥 RAW RECEIVED: '{line.Trim()}'");
                     inbox.Enqueue(line.Trim());
                 }
             }
@@ -167,7 +167,7 @@ public class SimpleKnifeMover : MonoBehaviour
                         prevY_mm = y_mm;
                         prevZ_mm = z_mm;
                         firstPacketReceived = true;
-                        Debug.Log($"First packet received: X={x_mm}, Y={y_mm}, Z={z_mm}");
+                        //Debug.Log($"First packet received: X={x_mm}, Y={y_mm}, Z={z_mm}");
                         continue;
                     }
 
@@ -182,24 +182,32 @@ public class SimpleKnifeMover : MonoBehaviour
                     prevZ_mm = z_mm;
 
                     // Integrate as small steps (convert mm to meters and remap axes)
-                    accumMeters += new Vector3(dx_mm, dy_mm, dz_mm) * MM_TO_M;                    
+                    // accumMeters += new Vector3(dx_mm, dy_mm, dz_mm) * MM_TO_M;                    
                     // Update position based on accumulated movement
+                    Vector3 deltaUnity = new Vector3(
+                        dx_mm * MM_TO_M,   // Robot Y → Unity X
+                        dy_mm * MM_TO_M,   // Robot Z → Unity Y
+                        dz_mm * MM_TO_M    // Robot X → Unity Z
+                    );
+
+                    // Integrate as small steps
+                    accumMeters += deltaUnity;
                     CombatKnife.position = originPos + accumMeters;
                     //CombatKnife.Translate(accumMeters, Space.World);
                     // Update rotation (if you want to use yaw, pitch, roll)
                     // Vector3 offsEulerDeg = new Vector3(pitch, yaw, roll);
                     // CombatKnife.rotation = originRot * Quaternion.Euler(offsEulerDeg);
 
-                    Debug.Log($"Serial Move - Delta: ({dx_mm:F2}, {dy_mm:F2}, {dz_mm:F2}) mm | Position: {CombatKnife.position}");
+                    //Debug.Log($"Serial Move - Delta: ({dx_mm:F2}, {dy_mm:F2}, {dz_mm:F2}) mm | Position: {CombatKnife.position}");
                 }
                 catch (FormatException e)
                 {
-                    Debug.LogError($"Error parsing message: {msg}. Exception: {e.Message}");
+                    //Debug.LogError($"Error parsing message: {msg}. Exception: {e.Message}");
                 }
             }
             else
             {
-                Debug.LogWarning($"Invalid message format. Expected 6 values, got {parts.Length}: {msg}");
+                //Debug.LogWarning($"Invalid message format. Expected 6 values, got {parts.Length}: {msg}");
             }
         }
     }
@@ -248,7 +256,7 @@ public class SimpleKnifeMover : MonoBehaviour
             float actualDepth = Mathf.Max(0f, rawDepth); // Only clamp negative values to 0
             
             string status = rawDepth < 0 ? "ABOVE SKIN (in air)" : "BELOW SKIN (CUTTING)";
-            Debug.Log($"KnifeTip Y: {knifeTipY:F4} | Skin Surface: {0.8764} | Raw Depth: {rawDepth:F4} | Actual Depth: {actualDepth:F4} | {status}");
+            //Debug.Log($"KnifeTip Y: {knifeTipY:F4} | Skin Surface: {0.8764} | Raw Depth: {rawDepth:F4} | Actual Depth: {actualDepth:F4} | {status}");
 
             // Automatically paint if knife is below skin surface (depth > 0)
             if (actualDepth > 0f)
@@ -286,7 +294,7 @@ public class SimpleKnifeMover : MonoBehaviour
                     float outerStrength = StampStrength * depthPercent * OuterStrengthMultiplier;
                     Painter.StampAtUV(uv, fullRadius, outerStrength);
                     
-                    Debug.Log($"🔴 AUTO-STAMPED at UV ({u:F3}, {v:F3}) | Depth: {actualDepth:F4} ({depthPercent * 100f:F0}%) | Inner: {innerStrength:F2}, Outer: {outerStrength:F2}");
+                    //Debug.Log($"🔴 AUTO-STAMPED at UV ({u:F3}, {v:F3}) | Depth: {actualDepth:F4} ({depthPercent * 100f:F0}%) | Inner: {innerStrength:F2}, Outer: {outerStrength:F2}");
                 }
             }
             else
@@ -302,8 +310,8 @@ public class SimpleKnifeMover : MonoBehaviour
         if (!KnifeTip || !Skin) return;
         if (!Cam) Cam = Camera.main;
 
-        ManualKeyboardControl();
-        //ProcessSerialData();
+        // ManualKeyboardControl();
+        ProcessSerialData();
     }
        
 }
