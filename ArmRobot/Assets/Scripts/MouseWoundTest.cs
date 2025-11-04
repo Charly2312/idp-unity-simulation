@@ -1,13 +1,33 @@
-﻿using UnityEngine;
+﻿using System;
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.IO.Ports;
+using System.Text;
+using System.Threading;
+using UnityEngine;
 
 public class SimpleKnifeMover : MonoBehaviour
 {
+    // === Serial Communication ===
+    private string portName = "COM8";
+    public int baud = 115200;
+    public int readTimeoutMs = 200;
+
+    SerialPort sp;
+    Thread reader;
+    volatile bool running;
+    readonly ConcurrentQueue<string> inbox = new ConcurrentQueue<string>();
+
     public Transform CombatKnife;        // Parent of KnifeTip
     public Transform KnifeTip;       // Assign a small sphere/GameObject
 
     public Transform Skin;           // Assign your Skin plane
     public Camera Cam;               // Leave empty to use Camera.main
     public WoundPainter Painter; 
+
+    // === Movement Settings ===
+    public bool UseSerialInput = true;   // Toggle between serial and keyboard control
+    public float rotationSpeed = 10f;    // Keyboard rotation speed
 
     public float moveSpeed = 0.1f;       // Movement speed for keyboard controls
     public float StampInterval = 0.1f; // seconds between paint stamps
@@ -33,6 +53,14 @@ public class SimpleKnifeMover : MonoBehaviour
     Transform skinTf;
     float _stampTimer = 0f;
     float _actualSkinSurfaceY; // The actual Y value used for calculations
+
+    // === Serial Data Processing ===
+    private const float MM_TO_M = 0.001f;
+    private Vector3 originPos = new Vector3(1.1232f, -2.247592f, 55.0154f);
+    private Quaternion originRot;
+    Vector3 accumMeters;
+    private float prevX_mm, prevY_mm, prevZ_mm;
+    private bool firstPacketReceived = false;
 
     void Start()
     {
@@ -60,13 +88,123 @@ public class SimpleKnifeMover : MonoBehaviour
         Debug.Log($"Actual Skin surface Y threshold: {_actualSkinSurfaceY:F4} units");
         Debug.Log($"Initial depth would be: {(_actualSkinSurfaceY - KnifeTip.position.y):F4} units");
         Debug.Log($"======================");
+
+        // Initialize serial port if using serial input
+        if (UseSerialInput)
+        {
+            InitializeSerialPort();
+        }
     }
 
-    void Update()
+    void InitializeSerialPort()
     {
-        if (!KnifeTip || !Skin) return;
-        if (!Cam) Cam = Camera.main;
+        Debug.Log("Available Ports: " + string.Join(", ", SerialPort.GetPortNames()));
 
+        sp = new SerialPort(portName, baud)
+        {
+            NewLine = "\n",
+            ReadTimeout = readTimeoutMs,
+            DtrEnable = true,
+            RtsEnable = true,
+            Encoding = Encoding.ASCII
+        };
+
+        try
+        {
+            sp.Open();
+            running = true;
+            reader = new Thread(ReadLoop) { IsBackground = true };
+            reader.Start();
+            Debug.Log($"Opened {sp.PortName} @ {baud} baud");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to open serial port: {ex.Message}");
+        }
+    }
+
+    void ReadLoop()
+    {
+        while (running && sp != null && sp.IsOpen)
+        {
+            try
+            {
+                string line = sp.ReadLine();
+                if (!string.IsNullOrWhiteSpace(line)) {
+                    Debug.Log($"📥 RAW RECEIVED: '{line.Trim()}'");
+                    inbox.Enqueue(line.Trim());
+                }
+            }
+            catch (TimeoutException) { /* ignore */ }
+            catch (InvalidOperationException) { break; }
+            catch (System.IO.IOException) { /* transient; continue */ }
+        }
+    }
+
+    void ProcessSerialData()
+    {
+        int n = 0;
+        while (n++ < 5 && inbox.TryDequeue(out var msg))
+        {
+            // Expected format: [x, y, z, yaw, pitch, roll]
+            string[] parts = msg.Trim('[', ']').Split(',');
+
+            if (parts.Length == 7)
+            {
+                try
+                {
+                    float x_mm = float.Parse(parts[0].Trim(), CultureInfo.InvariantCulture);
+                    float y_mm = float.Parse(parts[1].Trim(), CultureInfo.InvariantCulture);
+                    float z_mm = float.Parse(parts[2].Trim(), CultureInfo.InvariantCulture);
+                    float yaw = float.Parse(parts[3].Trim(), CultureInfo.InvariantCulture);
+                    float pitch = float.Parse(parts[4].Trim(), CultureInfo.InvariantCulture);
+                    float roll = float.Parse(parts[5].Trim(), CultureInfo.InvariantCulture);
+
+                    // Handle first packet
+                    if (!firstPacketReceived)
+                    {
+                        prevX_mm = x_mm;
+                        prevY_mm = y_mm;
+                        prevZ_mm = z_mm;
+                        firstPacketReceived = true;
+                        Debug.Log($"First packet received: X={x_mm}, Y={y_mm}, Z={z_mm}");
+                        continue;
+                    }
+
+                    // Calculate delta position (difference from previous)
+                    float dx_mm = -(x_mm - prevX_mm);  // Inverted for coordinate system
+                    float dy_mm = y_mm - prevY_mm;
+                    float dz_mm = z_mm - prevZ_mm;
+
+                    // Update previous values
+                    prevX_mm = x_mm;
+                    prevY_mm = y_mm;
+                    prevZ_mm = z_mm;
+
+                    // Integrate as small steps (convert mm to meters and remap axes)
+                    accumMeters += new Vector3(dx_mm, dy_mm, dz_mm) * MM_TO_M;                    
+                    // Update position based on accumulated movement
+                    CombatKnife.position = originPos + accumMeters;
+                    //CombatKnife.Translate(accumMeters, Space.World);
+                    // Update rotation (if you want to use yaw, pitch, roll)
+                    // Vector3 offsEulerDeg = new Vector3(pitch, yaw, roll);
+                    // CombatKnife.rotation = originRot * Quaternion.Euler(offsEulerDeg);
+
+                    Debug.Log($"Serial Move - Delta: ({dx_mm:F2}, {dy_mm:F2}, {dz_mm:F2}) mm | Position: {CombatKnife.position}");
+                }
+                catch (FormatException e)
+                {
+                    Debug.LogError($"Error parsing message: {msg}. Exception: {e.Message}");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"Invalid message format. Expected 6 values, got {parts.Length}: {msg}");
+            }
+        }
+    }
+
+    void ManualKeyboardControl() {
         // Keyboard movement controls
         Vector3 movement = Vector3.zero;
         
@@ -85,9 +223,21 @@ public class SimpleKnifeMover : MonoBehaviour
         // Apply movement
         CombatKnife.Translate(movement * moveSpeed * Time.deltaTime, Space.World);
         
-        // Set knife rotation
-        CombatKnife.rotation = Quaternion.LookRotation(Skin.up) * Quaternion.Euler(160, 180, 90);
+        // Rotation controls (optional)
+        float yaw = 0f, pitch = 0f, roll = 0f;
+        if (Input.GetKey(KeyCode.J)) yaw = -1f;
+        if (Input.GetKey(KeyCode.L)) yaw = 1f;
+        if (Input.GetKey(KeyCode.I)) pitch = -1f;
+        if (Input.GetKey(KeyCode.K)) pitch = 1f;
+        if (Input.GetKey(KeyCode.U)) roll = -1f;
+        if (Input.GetKey(KeyCode.O)) roll = 1f;
 
+        Vector3 rotation = new Vector3(pitch, yaw, roll);
+        CombatKnife.Rotate(rotation * rotationSpeed * Time.deltaTime, Space.Self);
+        PaintWound();
+    }
+
+    void PaintWound() {
         // Automatically check depth and paint wound
         if (Painter)
         {
@@ -146,4 +296,14 @@ public class SimpleKnifeMover : MonoBehaviour
             }
         }
     }
+    
+    void Update()
+    {
+        if (!KnifeTip || !Skin) return;
+        if (!Cam) Cam = Camera.main;
+
+        ManualKeyboardControl();
+        //ProcessSerialData();
+    }
+       
 }
