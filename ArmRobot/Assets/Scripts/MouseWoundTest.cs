@@ -9,112 +9,141 @@ public class SimpleKnifeMover : MonoBehaviour
     public Camera Cam;               // Leave empty to use Camera.main
     public WoundPainter Painter; 
 
-    public float HoverHeight = 0.4f;  // meters above skin when not pressing space
-    public float DepthSpeed = 0.01f;   // meters/second when holding space
+    public float moveSpeed = 0.1f;       // Movement speed for keyboard controls
     public float StampInterval = 0.1f; // seconds between paint stamps
     public float StampStrength = 1f;
-    public float BladeCheckDistance = 0.5f; // raycast distance from blade
+    public float MaxDepth = 0.0424f; // Maximum depth in meters (42.4mm)
+    
+    [Header("Skin Surface Detection")]
+    public bool AutoDetectSkinSurface = true; // Auto-detect from Skin object position
+    public float SkinSurfaceY = 0.8764f; // Manual override if AutoDetect is false
+    
+    [Header("Gradient Settings")]
+    public float InnerRadiusPercent = 0.5f; // Inner radius as percentage of brush radius (darker red)
+    public float InnerStrengthMultiplier = 1.0f; // Multiplier for inner region
+    public float OuterStrengthMultiplier = 0.5f; // Multiplier for outer region (lighter)
+    
+    [Header("Debug")]
+    public float DepthThreshold = 0.001f; // Minimum depth to consider "cutting" (1mm)
 
     // Manual UV mapping based on skin vertices
     private Vector2 _skinMin = new Vector2(54.69f, -2.26f); // (minX, minZ)
     private Vector2 _skinMax = new Vector2(55.42f, -1.74f); // (maxX, maxZ)
 
-    float _currentDepth = 0f;
+    Transform skinTf;
     float _stampTimer = 0f;
+    float _actualSkinSurfaceY; // The actual Y value used for calculations
+
+    void Start()
+    {
+        if (!KnifeTip) KnifeTip = transform;
+        var skinGO = GameObject.FindGameObjectWithTag("Skin");
+        if (skinGO) skinTf = skinGO.transform;
+        if (!Skin && skinTf) Skin = skinTf;
+        
+        // Auto-detect or use manual value
+        if (AutoDetectSkinSurface && Skin != null)
+        {
+            _actualSkinSurfaceY = SkinSurfaceY;
+            Debug.Log($"Auto-detected Skin Surface Y: {_actualSkinSurfaceY:F4} units");
+        }
+        else
+        {
+            _actualSkinSurfaceY = SkinSurfaceY;
+            Debug.Log($"Using manual Skin Surface Y: {_actualSkinSurfaceY:F4} units");
+        }
+        
+        Debug.Log($"=== INITIALIZATION ===");
+        Debug.Log($"Skin position: {Skin.position}");
+        Debug.Log($"KnifeTip position: {KnifeTip.position}");
+        Debug.Log($"KnifeTip Y: {KnifeTip.position.y:F4} units");
+        Debug.Log($"Actual Skin surface Y threshold: {_actualSkinSurfaceY:F4} units");
+        Debug.Log($"Initial depth would be: {(_actualSkinSurfaceY - KnifeTip.position.y):F4} units");
+        Debug.Log($"======================");
+    }
 
     void Update()
     {
         if (!KnifeTip || !Skin) return;
         if (!Cam) Cam = Camera.main;
-        if (!Cam) return;
 
-        if (!GetMouseOnSkin(out var mouseHitPos, out RaycastHit mouseHit)) return;
+        // Keyboard movement controls
+        Vector3 movement = Vector3.zero;
+        
+        // A/D - Left/Right
+        if (Input.GetKey(KeyCode.A)) movement.x -= 1f;
+        if (Input.GetKey(KeyCode.D)) movement.x += 1f;
+        
+        // W/S - Up/Down
+        if (Input.GetKey(KeyCode.W)) movement.y += 1f;
+        if (Input.GetKey(KeyCode.S)) movement.y -= 1f;
+        
+        // Q/E - Forward/Backward
+        if (Input.GetKey(KeyCode.Q)) movement.z -= 1f;
+        if (Input.GetKey(KeyCode.E)) movement.z += 1f;
+        
+        // Apply movement
+        CombatKnife.Translate(movement * moveSpeed * Time.deltaTime, Space.World);
+        
+        // Set knife rotation
+        CombatKnife.rotation = Quaternion.LookRotation(Skin.up) * Quaternion.Euler(160, 180, 90);
 
-        Vector3 targetPos = mouseHitPos;
-
-        if (Input.GetKey(KeyCode.Space))
+        // Automatically check depth and paint wound
+        if (Painter)
         {
-            _currentDepth += DepthSpeed * Time.deltaTime;
-            targetPos -= Skin.up * _currentDepth;
-            Debug.Log($"Spacebar held - Depth: {_currentDepth:F4}m");
+            // Custom depth calculation: depth = SkinSurfaceY - knifeTipY
+            // If knife Y < SkinSurfaceY, it's below the surface (cutting)
+            float knifeTipY = KnifeTip.position.y;
+            float rawDepth = 0.8764f - knifeTipY;
+            float actualDepth = Mathf.Max(0f, rawDepth); // Only clamp negative values to 0
+            
+            string status = rawDepth < 0 ? "ABOVE SKIN (in air)" : "BELOW SKIN (CUTTING)";
+            Debug.Log($"KnifeTip Y: {knifeTipY:F4} | Skin Surface: {0.8764} | Raw Depth: {rawDepth:F4} | Actual Depth: {actualDepth:F4} | {status}");
 
-            CombatKnife.position = targetPos;
-            CombatKnife.rotation = Quaternion.LookRotation(Skin.up) * Quaternion.Euler(160, 180, 90);
-
-           if (Painter)
+            // Automatically paint if knife is below skin surface (depth > 0)
+            if (actualDepth > 0f)
             {
-                // Raycast from blade edge to find where it hits skin
-                Vector3 bladePos = KnifeTip.position;
-                Vector3 bladeDir = -Skin.up;
+                // Calculate depth percentage (0 to 1) for color intensity
+                // Don't clamp actualDepth to MaxDepth - use full raw depth value
+                float depthPercent = Mathf.Clamp01(actualDepth / MaxDepth);
                 
-                Ray bladeRay = new Ray(bladePos + Skin.up * 0.1f, bladeDir); // start slightly above
+                // Update depth color based on actual depth
+                Painter.SetDepthFromTip(KnifeTip.position, Painter.MaxDepthMeters);
                 
-                if (Physics.Raycast(bladeRay, out RaycastHit bladeHit, BladeCheckDistance))
+                // Project knife tip position onto skin plane to get UV
+                Plane skinPlane = new Plane(Skin.up, Skin.position);
+                Vector3 projectedPos = skinPlane.ClosestPointOnPlane(KnifeTip.position);
+                
+                float u = 1f - ((projectedPos.x - _skinMin.x) / (_skinMax.x - _skinMin.x));
+                float v = 1f - ((projectedPos.z - _skinMin.y) / (_skinMax.y - _skinMin.y) + 0.2f);
+                
+                Vector2 uv = new Vector2(u, v);
+                
+                _stampTimer += Time.deltaTime;
+                if (_stampTimer >= StampInterval)
                 {
-                    //(0.51, 0.94) bottom middle
-                    //(0.95, 0.50) middle left
-                    //middle is (0.5, 0.5)
-                    //from middle to left edge is 0.44
-                    //from middle to bottom is 0.44
-                    if (bladeHit.transform == Skin || bladeHit.transform.IsChildOf(Skin))
-                    {
-                        Debug.DrawLine(bladePos, bladeHit.point, Color.red, 0.1f);
-                        
-                        // Manual UV calculation from world position
-                        Vector3 worldPos = bladeHit.point;
-                        
-                        // Map world X to U (normalize to 0-1)
-                        float u = 1f-((worldPos.x - _skinMin.x) / (_skinMax.x - _skinMin.x));
-                        
-                        // Map world Z to V (normalize to 0-1)
-                        float v = 1f -((worldPos.z - _skinMin.y) / (_skinMax.y - _skinMin.y));
-                        
-                        Vector2 uv = new Vector2(u, v);
-                        
-                        Debug.Log($"World pos: ({worldPos.x:F2}, {worldPos.z:F2}), Calculated UV: ({u:F3}, {v:F3})");
-                        
-                        _stampTimer += Time.deltaTime;
-                        if (_stampTimer >= StampInterval)
-                        {
-                            _stampTimer = 0f;
-                            Painter.StampAtUV(uv, Painter.BrushRadiusMeters, StampStrength);
-                            Debug.Log($"STAMPED at calculated UV ({u:F3}, {v:F3})");
-                        }
-                    }
+                    _stampTimer = 0f;
+                    
+                    // Paint two circles: inner (darker) and outer (lighter)
+                    float fullRadius = Painter.BrushRadiusMeters;
+                    float innerRadius = fullRadius * InnerRadiusPercent;
+                    
+                    // Paint inner circle (darker red) - strength increases with depth
+                    float innerStrength = StampStrength * depthPercent * InnerStrengthMultiplier;
+                    Painter.StampAtUV(uv, innerRadius, innerStrength);
+                    
+                    // Paint outer circle (lighter red) - strength increases with depth
+                    float outerStrength = StampStrength * depthPercent * OuterStrengthMultiplier;
+                    Painter.StampAtUV(uv, fullRadius, outerStrength);
+                    
+                    Debug.Log($"🔴 AUTO-STAMPED at UV ({u:F3}, {v:F3}) | Depth: {actualDepth:F4} ({depthPercent * 100f:F0}%) | Inner: {innerStrength:F2}, Outer: {outerStrength:F2}");
                 }
             }
-        }
-        else
-        {
-            _currentDepth = 0f;
-            _stampTimer = 0f;
-            targetPos += Skin.up * HoverHeight;
-            
-            CombatKnife.position = targetPos;
-            CombatKnife.rotation = Quaternion.LookRotation(Skin.up) * Quaternion.Euler(160, 180, 90); 
-        }
-    }
-
-    bool GetMouseOnSkin(out Vector3 hitPos, out RaycastHit hit)
-    {
-        hitPos = default; hit = default;
-        Ray ray = Cam.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out hit, 100f))
-        {
-            if (hit.transform == Skin || hit.transform.IsChildOf(Skin))
+            else
             {
-                hitPos = hit.point;
-                Debug.DrawLine(ray.origin, hitPos, Color.green, 0.02f);
-                return true;
+                // Reset stamp timer when not cutting
+                _stampTimer = 0f;
             }
         }
-        // Fallback infinite plane
-        Plane plane = new Plane(Skin.up, Skin.position);
-        if (plane.Raycast(ray, out float t))
-        {
-            hitPos = ray.GetPoint(t);
-            return true;
-        }
-        return false;
     }
 }

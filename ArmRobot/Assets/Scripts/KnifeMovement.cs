@@ -12,9 +12,17 @@ using Debug = UnityEngine.Debug;
 public class SimpleMovement : MonoBehaviour
 {
     // === Wound painting ===
-    //public Transform knifeTip;      // drag the blade tip Transform here
-    public LayerMask skinLayer;     // set to the Skin's layer
-    public float skinTopLocalY = 0f; // top surface Y of the skin in its local space
+    public WoundPainter Painter;           // Add reference to WoundPainter
+    public float StampInterval = 0.1f;     // seconds between paint stamps
+    public float StampStrength = 1f;
+    private float _stampTimer = 0f;
+    
+    // Manual UV mapping based on skin vertices
+    private Vector2 _skinMin = new Vector2(54.69f, -2.26f); // (minX, minZ)
+    private Vector2 _skinMax = new Vector2(55.42f, -1.74f); // (maxX, maxZ)
+    
+    public LayerMask skinLayer;
+    public float skinTopLocalY = 0f;
 
     Rigidbody rb;
     private string portName = "COM3"; // Testing using Arduino
