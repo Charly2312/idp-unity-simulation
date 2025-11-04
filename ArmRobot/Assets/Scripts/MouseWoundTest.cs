@@ -193,12 +193,16 @@ public class SimpleKnifeMover : MonoBehaviour
                     // Integrate as small steps
                     accumMeters += deltaUnity;
                     CombatKnife.position = originPos + accumMeters;
-                    //CombatKnife.Translate(accumMeters, Space.World);
-                    // Update rotation (if you want to use yaw, pitch, roll)
-                    // Vector3 offsEulerDeg = new Vector3(pitch, yaw, roll);
-                    // CombatKnife.rotation = originRot * Quaternion.Euler(offsEulerDeg);
+
+
+                    // --- Apply rotation from yaw, pitch, roll ---
+                    // If your device sends degrees, use as is. If radians, convert to degrees.
+                    // Adjust the order if your coordinate system differs.
+                    Quaternion rot = originRot * Quaternion.Euler(pitch, yaw, roll);
+                    CombatKnife.rotation = rot;
 
                     //Debug.Log($"Serial Move - Delta: ({dx_mm:F2}, {dy_mm:F2}, {dz_mm:F2}) mm | Position: {CombatKnife.position}");
+                    PaintWound();
                 }
                 catch (FormatException e)
                 {
