@@ -7,7 +7,7 @@ public class WoundPainter : MonoBehaviour
     [Header("Mask")]
     public int MaskSize = 1024;         // RT resolution
     public float MaxDepthMm = 3f;       // depth that equals Depth01=1
-    public float BrushRadiusMm = 20.0f;    // radius of stain in mm
+    public float BrushRadiusMm = 40.0f;    // radius of stain in mm
     public bool PreviewUV = false;      // (unused here, for your own gizmos)
 
     [Header("Refs")]

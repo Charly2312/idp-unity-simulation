@@ -22,6 +22,8 @@ public class SimpleKnifeMover : MonoBehaviour
 
     public Transform CombatKnife;        // Parent of KnifeTip
     public Transform KnifeTip;       // Assign a small sphere/GameObject
+    public Transform Scalpel;            // New: assign your Scalpel GameObject here
+    public Transform ScalpelTip;            // New: assign your Scalpel GameObject here
 
     public Transform Skin;           // Assign your Skin plane
     public Camera Cam;               // Leave empty to use Camera.main
@@ -66,10 +68,13 @@ public class SimpleKnifeMover : MonoBehaviour
 
     void Start()
     {
-        if (!KnifeTip) KnifeTip = transform;
+        if (!ScalpelTip) ScalpelTip = transform;
         var skinGO = GameObject.FindGameObjectWithTag("Skin");
         if (skinGO) skinTf = skinGO.transform;
         if (!Skin && skinTf) Skin = skinTf;
+
+        // Use Scalpel if assigned, otherwise fallback to CombatKnife
+        Transform tool = Scalpel ? Scalpel : CombatKnife;
 
         // Auto-detect or use manual value
         if (AutoDetectSkinSurface && Skin != null)
@@ -83,13 +88,13 @@ public class SimpleKnifeMover : MonoBehaviour
             Debug.Log($"Using manual Skin Surface Y: {_actualSkinSurfaceY:F4} units");
         }
 
-        Debug.Log($"=== INITIALIZATION ===");
-        Debug.Log($"Skin position: {Skin.position}");
-        Debug.Log($"KnifeTip position: {KnifeTip.position}");
-        Debug.Log($"KnifeTip Y: {KnifeTip.position.y:F4} units");
-        Debug.Log($"Actual Skin surface Y threshold: {_actualSkinSurfaceY:F4} units");
-        Debug.Log($"Initial depth would be: {(_actualSkinSurfaceY - KnifeTip.position.y):F4} units");
-        Debug.Log($"======================");
+        //Debug.Log($"=== INITIALIZATION ===");
+        //Debug.Log($"Skin position: {Skin.position}");
+        //Debug.Log($"ScalpelTip position: {ScalpelTip.position}");
+        //Debug.Log($"ScalpelTip Y: {ScalpelTip.position.y:F4} units");
+        //Debug.Log($"Actual Skin surface Y threshold: {_actualSkinSurfaceY:F4} units");
+        //Debug.Log($"Initial depth would be: {(_actualSkinSurfaceY - ScalpelTip.position.y):F4} units");
+        //Debug.Log($"======================");
 
         // Initialize serial port if using serial input
         if (UseSerialInput)
@@ -238,7 +243,7 @@ public class SimpleKnifeMover : MonoBehaviour
         {
             prevX_mm = x_mm; prevY_mm = y_mm; prevZ_mm = z_mm;
             // Use current knife position as origin to avoid big offsets
-            if (CombatKnife) { originPos = CombatKnife.position; originRot = CombatKnife.rotation; }
+            if (Scalpel) { originPos = Scalpel.position; originRot = Scalpel.rotation; }
             accumMeters = Vector3.zero;
             firstPacketReceived = true;
             return;
@@ -258,11 +263,11 @@ public class SimpleKnifeMover : MonoBehaviour
         );
 
         accumMeters += deltaUnity;
-        if (CombatKnife) CombatKnife.position = originPos + accumMeters;
+        if (Scalpel) Scalpel.position = originPos + accumMeters;
 
         // After parsing pitch, yaw, roll from serial data:
         Quaternion offsetRot = Quaternion.Euler(pitch, yaw, roll);
-        CombatKnife.rotation = originRot * offsetRot;
+        Scalpel.rotation = originRot * offsetRot;
 
         PaintWound();
     }
@@ -285,7 +290,7 @@ public class SimpleKnifeMover : MonoBehaviour
         if (Input.GetKey(KeyCode.E)) movement.z += 1f;
 
         // Apply movement
-        CombatKnife.Translate(movement * moveSpeed * Time.deltaTime, Space.World);
+        Scalpel.Translate(movement * moveSpeed * Time.deltaTime, Space.World);
 
         // Rotation controls (optional)
         float yaw = 0f, pitch = 0f, roll = 0f;
@@ -297,7 +302,7 @@ public class SimpleKnifeMover : MonoBehaviour
         if (Input.GetKey(KeyCode.O)) roll = 1f;
 
         Vector3 rotation = new Vector3(pitch, yaw, roll);
-        CombatKnife.Rotate(rotation * rotationSpeed * Time.deltaTime, Space.Self);
+        Scalpel.Rotate(rotation * rotationSpeed * Time.deltaTime, Space.Self);
         PaintWound();
     }
 
@@ -306,14 +311,14 @@ public class SimpleKnifeMover : MonoBehaviour
         // Automatically check depth and paint wound
         if (Painter)
         {
-            // Custom depth calculation: depth = SkinSurfaceY - knifeTipY
+            // Custom depth calculation: depth = SkinSurfaceY - ScalpelTipY
             // If knife Y < SkinSurfaceY, it's below the surface (cutting)
-            float knifeTipY = KnifeTip.position.y;
-            float rawDepth = 0.8764f - knifeTipY;
+            float ScalpelTipY = ScalpelTip.position.y;
+            float rawDepth = 0.8764f - ScalpelTipY;
             float actualDepth = Mathf.Max(0f, rawDepth); // Only clamp negative values to 0
 
             string status = rawDepth < 0 ? "ABOVE SKIN (in air)" : "BELOW SKIN (CUTTING)";
-            //Debug.Log($"KnifeTip Y: {knifeTipY:F4} | Skin Surface: {0.8764} | Raw Depth: {rawDepth:F4} | Actual Depth: {actualDepth:F4} | {status}");
+            //Debug.Log($"ScalpelTip Y: {ScalpelTipY:F4} | Skin Surface: {0.8764} | Raw Depth: {rawDepth:F4} | Actual Depth: {actualDepth:F4} | {status}");
 
             // Automatically paint if knife is below skin surface (depth > 0)
             if (actualDepth > 0f)
@@ -323,11 +328,11 @@ public class SimpleKnifeMover : MonoBehaviour
                 float depthPercent = Mathf.Clamp01(actualDepth / MaxDepth);
 
                 // Update depth color based on actual depth
-                Painter.SetDepthFromTip(KnifeTip.position, Painter.MaxDepthMeters);
+                Painter.SetDepthFromTip(ScalpelTip.position, Painter.MaxDepthMeters);
 
                 // Project knife tip position onto skin plane to get UV
                 Plane skinPlane = new Plane(Skin.up, Skin.position);
-                Vector3 projectedPos = skinPlane.ClosestPointOnPlane(KnifeTip.position);
+                Vector3 projectedPos = skinPlane.ClosestPointOnPlane(ScalpelTip.position);
 
                 float u = 1f - ((projectedPos.x - _skinMin.x) / (_skinMax.x - _skinMin.x));
                 float v = 1f - ((projectedPos.z - _skinMin.y) / (_skinMax.y - _skinMin.y) + 0.2f);
@@ -364,7 +369,7 @@ public class SimpleKnifeMover : MonoBehaviour
 
     void Update()
     {
-        if (!KnifeTip || !Skin) return;
+        if (!ScalpelTip || !Skin) return;
         if (!Cam) Cam = Camera.main;
 
         ManualKeyboardControl();
