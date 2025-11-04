@@ -119,7 +119,7 @@ public class SimpleKnifeMover : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to open serial port: {ex.Message}");
+            Debug.Log($"Failed to open serial port: {ex.Message}");
         }
     }
 
@@ -310,8 +310,8 @@ public class SimpleKnifeMover : MonoBehaviour
         if (!KnifeTip || !Skin) return;
         if (!Cam) Cam = Camera.main;
 
-        // ManualKeyboardControl();
-        ProcessSerialData();
+        ManualKeyboardControl();
+        //ProcessSerialData();
     }
        
 }
