@@ -423,7 +423,7 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: 4f0a2417c19bce64fb889b3685ae101b,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.1232
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 4f0a2417c19bce64fb889b3685ae101b,
         type: 3}
@@ -468,7 +468,7 @@ PrefabInstance:
     - target: {fileID: -8637017494797211975, guid: 4f0a2417c19bce64fb889b3685ae101b,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.1232
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -5455524229991266953, guid: 4f0a2417c19bce64fb889b3685ae101b,
         type: 3}
@@ -485,7 +485,7 @@ PrefabInstance:
     - target: {fileID: -668113519250922408, guid: 4f0a2417c19bce64fb889b3685ae101b,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.1232
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 4f0a2417c19bce64fb889b3685ae101b,
         type: 3}
@@ -495,7 +495,7 @@ PrefabInstance:
     - target: {fileID: 3029414273458302172, guid: 4f0a2417c19bce64fb889b3685ae101b,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.1232
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4762692394887987282, guid: 4f0a2417c19bce64fb889b3685ae101b,
         type: 3}
@@ -622,7 +622,7 @@ Transform:
   m_GameObject: {fileID: 968596142}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 55, y: 2.03, z: -2.11}
+  m_LocalPosition: {x: 55, y: 2.03, z: -2.1}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1301,6 +1301,9 @@ MonoBehaviour:
   InnerStrengthMultiplier: 1
   OuterStrengthMultiplier: 0.5
   DepthThreshold: 0.001
+  useOriginRelativeRotation: 1
+  rotationLerp: 0.5
+  serialRotationScale: 1
 --- !u!1 &1936935975 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -927199367670048503, guid: 3fba682e7b5a0444eb5e51e6fc772147,

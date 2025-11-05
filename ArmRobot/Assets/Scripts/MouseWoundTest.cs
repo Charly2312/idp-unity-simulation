@@ -11,7 +11,7 @@ using Debug = UnityEngine.Debug;
 public class SimpleKnifeMover : MonoBehaviour
 {
     // === Serial Communication ===
-    private string portName = "COM10";
+    private string portName = "COM5";
     public int baud = 115200;
     public int readTimeoutMs = 200;
 
@@ -350,8 +350,8 @@ public class SimpleKnifeMover : MonoBehaviour
         if (!ScalpelTip || !Skin) return;
         if (!Cam) Cam = Camera.main;
 
-        // ManualKeyboardControl();
-        ProcessSerialData();
+        ManualKeyboardControl();
+        //ProcessSerialData();
     }
 
 }
