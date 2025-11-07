@@ -334,7 +334,7 @@ public class SimpleKnifeMover : MonoBehaviour
                     float outerStrength = StampStrength * depthPercent * OuterStrengthMultiplier;
                     Painter.StampAtUV(uv, fullRadius, outerStrength);
 
-                    //Debug.Log($"🔴 AUTO-STAMPED at UV ({u:F3}, {v:F3}) | Depth: {actualDepth:F4} ({depthPercent * 100f:F0}%) | Inner: {innerStrength:F2}, Outer: {outerStrength:F2}");
+                    Debug.Log($"🔴 AUTO-STAMPED at UV ({u:F3}, {v:F3}) | Depth: {actualDepth:F4} ({depthPercent * 100f:F0}%) | Inner: {innerStrength:F2}, Outer: {outerStrength:F2}");
                 }
             }
             else
