@@ -33,7 +33,7 @@ public class WoundPainter : MonoBehaviour
             if (Application.isPlaying) skinRenderer.material = _mat;
         }
         
-        Debug.Log($"WoundPainter Init: BrushRadiusMm={BrushRadiusMm}, BrushRadiusMeters={BrushRadiusMeters}");
+        // Debug.Log($"WoundPainter Init: BrushRadiusMm={BrushRadiusMm}, BrushRadiusMeters={BrushRadiusMeters}");
         
         if (_maskRT == null || _maskRT.width != MaskSize)
         {
@@ -116,7 +116,7 @@ public class WoundPainter : MonoBehaviour
         float rUV = Mathf.Abs(radiusMeters / Mathf.Max(1e-6f, avgWorld));
 
         DoStampUV(uv, rUV, strength01);
-        Debug.Log($"World: {worldPos}, Local: ({local.x:F2}, {local.z:F2}), UV: ({uv.x:F3}, {uv.y:F3})");
+        // Debug.Log($"World: {worldPos}, Local: ({local.x:F2}, {local.z:F2}), UV: ({uv.x:F3}, {uv.y:F3})");
 
     }
     public void StampAtUV(Vector2 uv, float radiusMeters, float strength01 = 1f)
@@ -131,7 +131,7 @@ public class WoundPainter : MonoBehaviour
 
     // Use UV directly without any transformation
     DoStampUV(uv, rUV, strength01);
-    Debug.Log($"StampAtUV: UV=({uv.x:F3},{uv.y:F3}), radiusMeters={radiusMeters:F4}, rUV={rUV:F6}");
+    // Debug.Log($"StampAtUV: UV=({uv.x:F3},{uv.y:F3}), radiusMeters={radiusMeters:F4}, rUV={rUV:F6}");
     }
 
     void DoStampUV(Vector2 uv, float rUV, float strength01)
@@ -140,7 +140,7 @@ public class WoundPainter : MonoBehaviour
         _paintMat.SetVector("_BrushPos", new Vector4(uv.x, uv.y, 0, 0));
         _paintMat.SetFloat("_BrushRadius", rUV);
         _paintMat.SetFloat("_Strength", Mathf.Clamp01(strength01));
-        Debug.Log($"Shader params: _BrushPos=({uv.x:F3},{uv.y:F3}), _BrushRadius={rUV:F6}, _Strength={Mathf.Clamp01(strength01):F2}");
+        // Debug.Log($"Shader params: _BrushPos=({uv.x:F3},{uv.y:F3}), _BrushRadius={rUV:F6}, _Strength={Mathf.Clamp01(strength01):F2}");
 
         var tmp = RenderTexture.GetTemporary(_maskRT.descriptor);
         Graphics.Blit(_maskRT, tmp, _paintMat);

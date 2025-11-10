@@ -11,7 +11,7 @@ using Debug = UnityEngine.Debug;
 public class SimpleKnifeMover : MonoBehaviour
 {
     // === Serial Communication ===
-    private string portName = "COM5";
+    private string portName = "COM4";
     public int baud = 115200;
     public int readTimeoutMs = 200;
 
@@ -19,6 +19,11 @@ public class SimpleKnifeMover : MonoBehaviour
     Thread reader;
     volatile bool running;
     readonly ConcurrentQueue<string> inbox = new ConcurrentQueue<string>();
+
+    private bool _wasCutting = false;
+    private float _lastSendTime = -999f;
+    private float _sendCooldown = 0.05f; // seconds
+    private readonly object _serialLock = new object();
 
     public Transform CombatKnife;        // Parent of KnifeTip
     public Transform KnifeTip;       // Assign a small sphere/GameObject
@@ -28,6 +33,16 @@ public class SimpleKnifeMover : MonoBehaviour
     public Transform Skin;           // Assign your Skin plane
     public Camera Cam;               // Leave empty to use Camera.main
     public WoundPainter Painter;
+
+    [SerializeField] private Vector3 startPos;
+    [SerializeField] private Quaternion startRot;
+
+    Rigidbody rb;
+    bool cutting;
+    bool ignored;
+    bool isStuck;
+    Vector3 lastPos;
+    Vector3 lastTipPos;
 
     // === Movement Settings ===
     public bool UseSerialInput = false;   // Toggle between serial and keyboard control
@@ -40,7 +55,7 @@ public class SimpleKnifeMover : MonoBehaviour
 
     [Header("Skin Surface Detection")]
     public bool AutoDetectSkinSurface = true; // Auto-detect from Skin object position
-    public float SkinSurfaceY = 0.8764f; // Manual override if AutoDetect is false
+    public float SkinSurfaceY = 0.8464f; // Manual override if AutoDetect is false
 
     [Header("Gradient Settings")]
     public float InnerRadiusPercent = 0.5f; // Inner radius as percentage of brush radius (darker red)
@@ -78,90 +93,94 @@ public class SimpleKnifeMover : MonoBehaviour
     private Vector3 _initialScalpelPos;
     private Quaternion _initialScalpelRot;
 
+    void OnValidate()
+    {
+        if (!Application.isPlaying)
+        {
+            // Capture the current scene pose as the spawn (play-again) pose.
+            Transform tool = Scalpel ? Scalpel : (CombatKnife ? CombatKnife : transform);
+            startPos = tool.position;
+            startRot = tool.rotation;
+        }
+    }
+
     void Awake()
     {
-        // cache initial pose early
         if (Scalpel)
         {
             _initialScalpelPos = Scalpel.position;
             _initialScalpelRot = Scalpel.rotation;
         }
+        // Assign rb from the active tool or self
+        rb = (Scalpel ? Scalpel.GetComponent<Rigidbody>() :
+             CombatKnife ? CombatKnife.GetComponent<Rigidbody>() :
+             GetComponent<Rigidbody>());
     }
 
     void Start()
     {
-        if (!ScalpelTip) ScalpelTip = transform;
+        if (!ScalpelTip) ScalpelTip = Scalpel ? Scalpel : transform;
+
+        ResetKnifeAndWounds();
+        
         var skinGO = GameObject.FindGameObjectWithTag("Skin");
         if (skinGO) skinTf = skinGO.transform;
         if (!Skin && skinTf) Skin = skinTf;
 
-        try
+        // If OnValidate didn’t run (built player), capture pose now
+        Transform tool = Scalpel ? Scalpel : (CombatKnife ? CombatKnife : transform);
+        if (startRot == Quaternion.identity && startPos == Vector3.zero)
         {
-            // Reset the same transform you move during gameplay (Scalpel preferred)
-            Transform tool = Scalpel ? Scalpel : CombatKnife;
-            if (tool)
-            {
-                tool.position = _initialScalpelPos;
-                tool.rotation = _initialScalpelRot;
-            }
-        }
-        catch { /* ignore */ }
-
-        // Auto-detect or use manual value
-        if (AutoDetectSkinSurface && Skin != null)
-        {
-            _actualSkinSurfaceY = SkinSurfaceY;
-            Debug.Log($"Auto-detected Skin Surface Y: {_actualSkinSurfaceY:F4} units");
-        }
-        else
-        {
-            _actualSkinSurfaceY = SkinSurfaceY;
-            Debug.Log($"Using manual Skin Surface Y: {_actualSkinSurfaceY:F4} units");
+            startPos = tool.position;
+            startRot = tool.rotation;
         }
 
-        //Debug.Log($"=== INITIALIZATION ===");
-        //Debug.Log($"Skin position: {Skin.position}");
-        //Debug.Log($"ScalpelTip position: {ScalpelTip.position}");
-        //Debug.Log($"ScalpelTip Y: {ScalpelTip.position.y:F4} units");
-        //Debug.Log($"Actual Skin surface Y threshold: {_actualSkinSurfaceY:F4} units");
-        //Debug.Log($"Initial depth would be: {(_actualSkinSurfaceY - ScalpelTip.position.y):F4} units");
-        //Debug.Log($"======================");
+        // Do NOT reposition here; keep scene spawn
+        originPos = startPos;
+        originRot = startRot;
+        lastPos = tool.position;
+        lastTipPos = (ScalpelTip ? ScalpelTip.position : tool.position);
 
-        // Initialize serial port if using serial input
-        if (UseSerialInput)
-        {
-            InitializeSerialPort();
-        }
+        _actualSkinSurfaceY = SkinSurfaceY;
 
-        if (Scalpel)
-        {
-            _initialScalpelPos = Scalpel.position;
-            _initialScalpelRot = Scalpel.rotation;
-        }
-
+        if (UseSerialInput) InitializeSerialPort();
     }
 
-    public void ResetPoseAndRehome()
+    public void PlayAgain()
     {
-        // reactivate objects if they were hidden
-        if (Scalpel) Scalpel.gameObject.SetActive(true);
-        if (ScalpelTip) ScalpelTip.gameObject.SetActive(true);
+        ResetKnifeAndWounds();
+    }
 
-        // reset transform
-        if (Scalpel)
+    public void ResetKnifeAndWounds()
+    {
+        Transform tool = (Scalpel != null) ? Scalpel : (CombatKnife != null ? CombatKnife : transform);
+
+        // Reset transform and cached origins
+        tool.position = startPos;
+        tool.rotation = startRot;
+        originPos = startPos;
+        originRot = startRot;
+
+        // Reset motion/state
+        accumMeters = Vector3.zero;
+        lastPos = tool.position;
+        lastTipPos = (ScalpelTip != null) ? ScalpelTip.position : tool.position;
+
+        cutting = false;
+        ignored = false;
+        isStuck = false;
+
+        if (rb)
         {
-            Scalpel.position = _initialScalpelPos;
-            Scalpel.rotation = _initialScalpelRot;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.constraints = RigidbodyConstraints.None;
         }
 
-        // zero motion accumulators and force next serial origin
-        accumMeters = Vector3.zero;
-        prevX_mm = prevY_mm = prevZ_mm = 0f;
-        prevYaw_deg = prevPitch_deg = prevRoll_deg = 0f;
-        firstPacketReceived = false;
+        _stampTimer = 0f;
+        _wasCutting = false;
 
-        var rb = Scalpel ? Scalpel.GetComponentInParent<Rigidbody>() : null;
-        if (rb) { rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+        if (Painter) Painter.Clear();
     }
 
     bool CanPaintNow() => incisionGame.AllowPainting;
@@ -189,6 +208,51 @@ public class SimpleKnifeMover : MonoBehaviour
         catch (Exception ex)
         {
             Debug.Log($"Failed to open serial port: {ex.Message}");
+        }
+    }
+
+    void EnsureSerialForWrite()
+    {
+        if (sp != null && sp.IsOpen) return;
+
+        sp = new SerialPort(portName, baud)
+        {
+            NewLine = "\n",
+            ReadTimeout = readTimeoutMs,
+            DtrEnable = true,
+            RtsEnable = true,
+            Encoding = Encoding.ASCII
+        };
+
+        try
+        {
+            sp.Open();
+            Debug.Log($"Opened {sp.PortName} for TX @ {baud}");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"Serial open (TX) failed: {ex.Message}");
+        }
+    }
+
+    void SendMsgIfAllowed()
+    {
+        if (Time.time - _lastSendTime < _sendCooldown) return;
+        EnsureSerialForWrite();
+        if (sp == null || !sp.IsOpen) return;
+
+        try
+        {
+            lock (_serialLock)
+            {
+                sp.WriteLine("hii");
+            }
+            _lastSendTime = Time.time;
+            // Debug.Log("TX: hii");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"Serial write failed: {ex.Message}");
         }
     }
 
@@ -240,9 +304,9 @@ public class SimpleKnifeMover : MonoBehaviour
         float pitch = pitchRad * Mathf.Rad2Deg;
         float roll  = rollRad  * Mathf.Rad2Deg;
         // roll isnt working well 
-        Debug.Log(    $"x={x_mm:F2} y={y_mm:F2} z={z_mm:F2} mm | " +
-                      $"yaw={yawRad:F3} pitch={pitchRad:F3} roll={rollRad:F3} rad | " +
-                      $"yaw={yaw:F1} pitch={pitch:F1} roll={roll:F1} deg");
+        // Debug.Log(    $"x={x_mm:F2} y={y_mm:F2} z={z_mm:F2} mm | " +
+        //               $"yaw={yawRad:F3} pitch={pitchRad:F3} roll={rollRad:F3} rad | " +
+        //               $"yaw={yaw:F1} pitch={pitch:F1} roll={roll:F1} deg");
 
         if (!firstPacketReceived)
         {
@@ -349,10 +413,18 @@ public class SimpleKnifeMover : MonoBehaviour
             float ScalpelTipY = ScalpelTip.position.y;
             float rawDepth = 0.8764f - ScalpelTipY;
             float actualDepth = Mathf.Max(0f, rawDepth); // Only clamp negative values to 0
-
+            
+            bool CutSkin = actualDepth > 0f;
             string status = rawDepth < 0 ? "ABOVE SKIN (in air)" : "BELOW SKIN (CUTTING)";
             //Debug.Log($"ScalpelTip Y: {ScalpelTipY:F4} | Skin Surface: {0.8764} | Raw Depth: {rawDepth:F4} | Actual Depth: {actualDepth:F4} | {status}");
 
+            if (!_wasCutting && CutSkin)
+            {
+                SendMsgIfAllowed();
+                Debug.Log("sent message to ard");
+            }
+
+            _wasCutting = CutSkin;
             // Automatically paint if knife is below skin surface (depth > 0)
             if (actualDepth > 0f)
             {
@@ -389,7 +461,7 @@ public class SimpleKnifeMover : MonoBehaviour
                     float outerStrength = StampStrength * depthPercent * OuterStrengthMultiplier;
                     Painter.StampAtUV(uv, fullRadius, outerStrength);
 
-                    Debug.Log($"🔴 AUTO-STAMPED at UV ({u:F3}, {v:F3}) | Depth: {actualDepth:F4} ({depthPercent * 100f:F0}%) | Inner: {innerStrength:F2}, Outer: {outerStrength:F2}");
+                    //  Debug.Log($"🔴 AUTO-STAMPED at UV ({u:F3}, {v:F3}) | Depth: {actualDepth:F4} ({depthPercent * 100f:F0}%) | Inner: {innerStrength:F2}, Outer: {outerStrength:F2}");
                 }
             }
             else

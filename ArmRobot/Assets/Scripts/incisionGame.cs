@@ -1,6 +1,8 @@
 using UnityEngine;
 using System;
 using Random = UnityEngine.Random;
+using TMPro;
+
 /// Incision mini-game controller:
 /// - Random path (line) on the skin plane constrained by provided boundary colliders
 /// - Green start and red end markers
@@ -14,6 +16,7 @@ public class incisionGame : MonoBehaviour
     public Transform ScalpelTip;           // Tip transform used for depth and contact
     public Camera Cam;                     // Optional, defaults to Camera.main
     public WoundPainter Painter;           // Your existing painter (optional but recommended)
+    public TextMeshProUGUI TimerText;
 
     [Header("Depth Settings")]
     public float SkinSurfaceY = 0.8764f;   // Skin surface height (world Y)
@@ -57,8 +60,6 @@ public class incisionGame : MonoBehaviour
 
     [Header("Robotic Controller Hook (optional)")]
     public SimpleKnifeMover RobotMover;         // If assigned, you can re-home/origin only when Play Again is clicked
-    [Header("Knife Controller (for Play Again)")]
-    public SimpleMovement KnifeMovement; 
 
     [Header("End UI Settings")]
     [Tooltip("Distance in front of camera for end buttons.")]
@@ -67,8 +68,9 @@ public class incisionGame : MonoBehaviour
     public float EndUIButtonVerticalGap = 0.12f;
     [Tooltip("Optional name of a public method on Painter used to clear the texture.")]
     public string PainterClearMethodName = "Clear";
-    enum GameState { Idle, Playing, Completed, GameOver, TimeUp, EndScreen, FreeMode }
-    
+
+    enum GameState { Idle, Playing, Completed, GameOver, TimeUp, EndScreen, FreeMode, Freeze }
+
     [Header("Path Direction & Start Highlight")]
     [Tooltip("If true, the start (green) dot is placed 'above' the end (red) dot relative to the camera view (top-to-bottom cut).")]
     public bool ForceTopToBottom = true;
@@ -97,6 +99,11 @@ public class incisionGame : MonoBehaviour
 
     // End UI overlay (3D interactable)
     PenetrationButton _btnPlayAgain, _btnMainMenu;
+    PenetrationButton _btnStart; 
+
+    enum PendingChoice { None, PlayAgain, FreeMode }
+    PendingChoice _pendingChoice = PendingChoice.None;
+
     string _endReason;
     float _finalScore;
 
@@ -107,6 +114,7 @@ public class incisionGame : MonoBehaviour
     GameObject _startHighlight;
     bool _startTouched = false;
     public static bool AllowPainting = false;
+    public static bool FreezeTool = false; // knife movement pause
 
     void Awake()
     {
@@ -155,6 +163,14 @@ public class incisionGame : MonoBehaviour
     {
         if (!Cam) Cam = Camera.main;
         if (_state == GameState.Playing)
+
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            OnResetKey();
+            return;
+        }
+
+       if (_state == GameState.Playing)
         {
             // Update timer
             _timeLeft -= Time.deltaTime;
@@ -163,6 +179,14 @@ public class incisionGame : MonoBehaviour
                 _timeLeft = 0f;
                 EndRound(GameState.TimeUp, "Time is up");
                 return;
+            }
+
+            if (TimerText)
+            {
+                int secs = Mathf.CeilToInt(_timeLeft);
+                int mm = secs / 60;
+                int ss = secs % 60;
+                TimerText.text = $"{mm:00}:{ss:00}";
             }
 
             // Depth
@@ -208,7 +232,6 @@ public class incisionGame : MonoBehaviour
                 _sumAbsError += Mathf.Abs(lateral);
                 _samples++;
 
-                // Looser condition for advancing progress so it actually moves
                 float progressTol = LateralTolerance * Mathf.Max(1f, ProgressToleranceMultiplier);
                 if (Mathf.Abs(lateral) <= progressTol)
                 {
@@ -222,6 +245,21 @@ public class incisionGame : MonoBehaviour
                 EndRound(GameState.Completed, "Incision completed!");
                 return;
             }
+        }
+        else if (_state == GameState.FreeMode)
+        {
+            // No timer in free mode
+            if (TimerText) TimerText.text = "";
+
+            // Allow painting freely in free mode
+            AllowPainting = true;
+            if (Painter && !Painter.enabled) Painter.enabled = true;
+        }
+        else
+        {
+            // Any menu/freeze/idle: no painting, no timer
+            if (TimerText) TimerText.text = "";
+            AllowPainting = false;
         }
     }
 
@@ -261,6 +299,7 @@ public class incisionGame : MonoBehaviour
         _timeLeft = RoundSeconds;
         _roundStartTime = Time.time; 
         _state = GameState.Playing;
+        incisionGame.AllowPainting = true;
         _line.enabled = true;
 
         HideEndButtons();
@@ -285,19 +324,10 @@ public class incisionGame : MonoBehaviour
     {
         _state = endState;
         _endReason = reason;
+        incisionGame.AllowPainting = false;
 
-        // Compute score: progress ratio times closeness factor.
-        float progressRatio = (_pathLen > 0f) ? Mathf.Clamp01(_maxProgress / _pathLen) : 0f;
-
-        // If no samples recorded, don't zero-out the score; treat closeness as neutral (1.0)
-        float avgErr = (_samples > 0) ? (float)(_sumAbsError / _samples) : 0f;
-        float closeness = (_samples > 0)
-            ? Mathf.Clamp01(1f - (avgErr / Mathf.Max(1e-6f, LateralTolerance)))
-            : 1f;
-
-        _finalScore = 100f * progressRatio * closeness;
-
-        ShowEndButtons();
+        // ...existing scoring...
+        ShowEndButtons(); // shows Play Again + Free Mode
         _state = GameState.EndScreen;
 
         AllowPainting = false;
@@ -531,6 +561,38 @@ public class incisionGame : MonoBehaviour
         if (col) col.isTrigger = true;
     }
 
+    void ShowModeButtons()
+    {
+        ShowEndButtons(); // reuse
+    }
+
+    void EnterFreezeOverlay()
+    {
+        // Freeze tool movement and hide choice buttons; show a single Start button
+        FreezeTool = true;
+        AllowPainting = false;
+        if (TimerText) TimerText.text = "";
+
+        HideEndButtons();
+        ShowStartButton();
+        _state = GameState.Freeze;
+    }
+        void ShowStartButton()
+    {
+        if (!Cam) Cam = Camera.main;
+        Vector3 center = Cam.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, EndUIButtonDistance));
+        Quaternion face = Quaternion.LookRotation(center - Cam.transform.position, Cam.transform.up);
+
+        _btnStart = PenetrationButton.Create("Start", center, face, OnStartClicked, ScalpelTip);
+        if (_btnStart) _btnStart.transform.localScale = new Vector3(0.18f, 0.06f, 0.02f);
+    }
+
+    void HideStartButton()
+    {
+        if (_btnStart) Destroy(_btnStart.gameObject);
+        _btnStart = null;
+    }
+
     void ShowEndButtons()
     {
         HideEndButtons();
@@ -540,24 +602,19 @@ public class incisionGame : MonoBehaviour
             Debug.LogWarning("incisionGame: No camera found for end buttons.");
             return;
         }
-        // Position centered in view
-        Vector3 center = Cam.ViewportToWorldPoint(
-            new Vector3(0.5f, 0.5f, EndUIButtonDistance));
-
-        // Make them face camera
+        Vector3 center = Cam.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, EndUIButtonDistance));
         Quaternion face = Quaternion.LookRotation(center - Cam.transform.position, Cam.transform.up);
 
         Vector3 up = Cam.transform.up;
         float gap = EndUIButtonVerticalGap * 0.5f;
 
-        // Play Again on top, Main Menu below
         _btnPlayAgain = PenetrationButton.Create("Play Again",
             center + up * gap, face, OnPlayAgainClicked, ScalpelTip);
 
-        _btnMainMenu = PenetrationButton.Create("Main Menu",
+        // Rename to Free Mode
+        _btnMainMenu = PenetrationButton.Create("Free Mode",
             center - up * gap, face, OnMainMenuClicked, ScalpelTip);
 
-        // Optional: tweak scale for readability
         if (_btnPlayAgain) _btnPlayAgain.transform.localScale = new Vector3(0.18f, 0.06f, 0.02f);
         if (_btnMainMenu) _btnMainMenu.transform.localScale = new Vector3(0.18f, 0.06f, 0.02f);
     }
@@ -571,24 +628,57 @@ public class incisionGame : MonoBehaviour
 
     void OnPlayAgainClicked()
     {
-        if (KnifeMovement != null)
-        {
-            KnifeMovement.PlayAgain();
-        }
-        else
-        {
-            var sm = FindObjectOfType<SimpleMovement>();
-            if (sm) sm.PlayAgain();
-        }
-        
-        ResetRobotAndPainter();
-        StartRound();
+        // Prepare for restart, then enter freeze and show Start
+        if (RobotMover) RobotMover.ResetKnifeAndWounds();
+        if (Painter && ClearPainterOnReset) Painter.Clear();
+
+        _pendingChoice = PendingChoice.PlayAgain;
+        EnterFreezeOverlay();
     }
 
     void OnMainMenuClicked()
     {
+        // Rename to Free Mode: same flow
+        if (RobotMover) RobotMover.ResetKnifeAndWounds();
+        if (Painter && ClearPainterOnReset) Painter.Clear();
+
+        _pendingChoice = PendingChoice.FreeMode;
+        EnterFreezeOverlay();
+    }
+
+    void OnStartClicked()
+    {
+        // Unfreeze and go to chosen mode
+        FreezeTool = false;
+
+        if (_pendingChoice == PendingChoice.PlayAgain)
+        {
+            if (RobotMover) RobotMover.PlayAgain();
+            StartRound();
+        }
+        else if (_pendingChoice == PendingChoice.FreeMode)
+        {
+            // Free mode: clear lines/markers and allow manual painting toggle if needed
+            EnterFreeMode();
+        }
+
+        _pendingChoice = PendingChoice.None;
+        HideStartButton();
+    }
+
+    void OnResetKey()
+    {
+        // User requests reset flow anywhere
+        FreezeTool = true;
+        AllowPainting = false;
+
+        // Reset painter/tool visuals
         ResetRobotAndPainter();
-        EnterMainMenu();
+
+        // Show choice buttons (Play Again / Free Mode)
+        HideEndButtons();
+        ShowModeButtons(); // reuse end buttons layout
+        _state = GameState.EndScreen;
     }
 
     void EnterMainMenu()
@@ -602,20 +692,7 @@ public class incisionGame : MonoBehaviour
         AllowPainting = false;
         if (Painter) Painter.enabled = false;
     }
-
-    // public void Clear()
-    // {
-    //     // Clear your wound texture – adapt to your actual field name
-    //     if (woundTexture != null)
-    //     {
-    //         RenderTexture active = RenderTexture.active;
-    //         Graphics.SetRenderTarget(woundTexture);
-    //         GL.Clear(true, true, Color.clear);
-    //         RenderTexture.active = active;
-    //         Debug.Log("WoundPainter: Texture cleared.");
-    //     }
-    // }
-
+    
     void TryClearPainterTexture()
     {
         if (Painter == null) return;
@@ -688,7 +765,7 @@ public class incisionGame : MonoBehaviour
         
         if (RobotMover != null)
         {
-            RobotMover.ResetPoseAndRehome();
+            RobotMover.ResetKnifeAndWounds();
         }
 
         // Reset local game state

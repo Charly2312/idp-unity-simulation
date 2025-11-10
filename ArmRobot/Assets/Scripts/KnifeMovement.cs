@@ -159,7 +159,7 @@ public class SimpleMovement : MonoBehaviour
 
         if (rb)
         {
-            rb.velocity = Vector3.zero;
+            rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
             rb.constraints = RigidbodyConstraints.None;
         }
