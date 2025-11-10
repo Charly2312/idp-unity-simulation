@@ -69,6 +69,9 @@ public class SimpleMovement : MonoBehaviour
     float prevX_mm, prevY_mm, prevZ_mm;
     Vector3 accumMeters; // integrate motion
 
+    [SerializeField] private Vector3 startPos;
+    [SerializeField] private Quaternion startRot;
+
     // --- add these fields ---
     [SerializeField] Transform KnifeTip;         // you already have this
     Transform skinTf;                            // <-- this is what I meant by skinRoot
@@ -94,16 +97,20 @@ public class SimpleMovement : MonoBehaviour
         skinMesh = skinGO.GetComponent<MeshCollider>();
     }
 
+    void OnValidate()
+    {
+        if (!Application.isPlaying)
+        {
+            startPos = transform.position;
+            startRot = transform.rotation;
+        }
+    }
+
     void Start()
     {
-        // in Start()
         if (!KnifeTip) KnifeTip = transform;
-        lastTipPos = KnifeTip.position;
-        originPos = transform.position;
-        originRot = transform.rotation;
-        lastPos = transform.position;
 
-        Debug.Log("Ports: " + string.Join(", ", SerialPort.GetPortNames()));
+        ResetKnifeAndWounds();
 
         sp = new SerialPort(portName, baud)
         {
@@ -126,6 +133,39 @@ public class SimpleMovement : MonoBehaviour
         {
             Debug.LogError("Open failed: " + ex.Message);
         }
+    }
+
+    public void PlayAgain()
+    {
+        ResetKnifeAndWounds();
+    }
+
+    void ResetKnifeAndWounds()
+    {
+        // Reset transform and cached origins
+        transform.position = startPos;
+        transform.rotation = startRot;
+        originPos = startPos;
+        originRot = startRot;
+
+        // Reset motion/state
+        accumMeters = Vector3.zero;
+        lastPos = transform.position;
+        lastTipPos = KnifeTip ? KnifeTip.position : transform.position;
+
+        cutting = false;
+        ignored = false;
+        isStuck = false;
+
+        if (rb)
+        {
+            rb.velocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.constraints = RigidbodyConstraints.None;
+        }
+
+        // Clear wound mask
+        if (Painter != null) Painter.Clear();
     }
 
     void ReadLoop()

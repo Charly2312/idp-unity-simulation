@@ -57,7 +57,9 @@ public class incisionGame : MonoBehaviour
 
     [Header("Robotic Controller Hook (optional)")]
     public SimpleKnifeMover RobotMover;         // If assigned, you can re-home/origin only when Play Again is clicked
-    
+    [Header("Knife Controller (for Play Again)")]
+    public SimpleMovement KnifeMovement; 
+
     [Header("End UI Settings")]
     [Tooltip("Distance in front of camera for end buttons.")]
     public float EndUIButtonDistance = 0.7f;
@@ -569,6 +571,16 @@ public class incisionGame : MonoBehaviour
 
     void OnPlayAgainClicked()
     {
+        if (KnifeMovement != null)
+        {
+            KnifeMovement.PlayAgain();
+        }
+        else
+        {
+            var sm = FindObjectOfType<SimpleMovement>();
+            if (sm) sm.PlayAgain();
+        }
+        
         ResetRobotAndPainter();
         StartRound();
     }
