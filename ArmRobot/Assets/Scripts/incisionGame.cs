@@ -162,9 +162,8 @@ public class incisionGame : MonoBehaviour
     void Update()
     {
         if (!Cam) Cam = Camera.main;
-        if (_state == GameState.Playing)
 
-        if (Input.GetKeyDown(KeyCode.R))
+        if ((_state == GameState.Playing || _state == GameState.FreeMode) && Input.GetKeyDown(KeyCode.R))
         {
             OnResetKey();
             return;
