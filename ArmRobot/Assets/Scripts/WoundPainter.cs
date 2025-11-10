@@ -73,6 +73,31 @@ public class WoundPainter : MonoBehaviour
         _mat.SetFloat("_Depth01", d01);
     }
 
+    public void Clear()
+    {
+        // Ensure RT exists
+        if (_maskRT == null || !_maskRT.IsCreated() || _maskRT.width != MaskSize)
+        {
+            if (_maskRT) _maskRT.Release();
+            _maskRT = new RenderTexture(MaskSize, MaskSize, 0, RenderTextureFormat.R8)
+            {
+                useMipMap = false,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            _maskRT.Create();
+        }
+
+        // Clear to black (no wounds)
+        var active = RenderTexture.active;
+        Graphics.SetRenderTarget(_maskRT);
+        GL.Clear(true, true, Color.black);
+        RenderTexture.active = active;
+
+        // Rebind to material
+        if (_mat) _mat.SetTexture("_WoundMask", _maskRT);
+    }
+
     public void StampAtWorld(Vector3 worldPos, float radiusMeters, float strength01 = 1f)
     {
         if (!_paintMat || !_maskRT || !skin) return;
@@ -125,7 +150,7 @@ public class WoundPainter : MonoBehaviour
 
     void OnDisable()
     {
-        if (_maskRT) { _maskRT.Release(); _maskRT = null; }
+        // Keep _maskRT alive so external clears (incisionGame) still work while disabled
         if (_paintMat)
         {
             if (Application.isPlaying) Destroy(_paintMat);

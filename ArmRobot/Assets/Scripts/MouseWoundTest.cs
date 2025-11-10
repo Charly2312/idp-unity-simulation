@@ -30,8 +30,8 @@ public class SimpleKnifeMover : MonoBehaviour
     public WoundPainter Painter;
 
     // === Movement Settings ===
-    public bool UseSerialInput = true;   // Toggle between serial and keyboard control
-    public float rotationSpeed = 10f;    // Keyboard rotation speed
+    public bool UseSerialInput = false;   // Toggle between serial and keyboard control
+    public float rotationSpeed = 150.0f;    // Keyboard rotation speed
 
     public float moveSpeed = 0.1f;       // Movement speed for keyboard controls
     public float StampInterval = 0.1f; // seconds between paint stamps
@@ -60,7 +60,7 @@ public class SimpleKnifeMover : MonoBehaviour
 
     // === Serial Data Processing ===
     private const float MM_TO_M = 0.001f;
-    private Vector3 originPos = new Vector3(55.0154f, 0.88f, -2.247592f);
+    private Vector3 originPos = new Vector3(55.0154f, 0.846f, -2.247592f);
     private Quaternion originRot;
     Vector3 accumMeters;
     private float prevX_mm, prevY_mm, prevZ_mm;
@@ -75,6 +75,19 @@ public class SimpleKnifeMover : MonoBehaviour
     private float originYaw_deg, originPitch_deg, originRoll_deg; // from first packet
     private float prevYaw_deg, prevPitch_deg, prevRoll_deg;       // for incremental mode
 
+    private Vector3 _initialScalpelPos;
+    private Quaternion _initialScalpelRot;
+
+    void Awake()
+    {
+        // cache initial pose early
+        if (Scalpel)
+        {
+            _initialScalpelPos = Scalpel.position;
+            _initialScalpelRot = Scalpel.rotation;
+        }
+    }
+
     void Start()
     {
         if (!ScalpelTip) ScalpelTip = transform;
@@ -82,8 +95,17 @@ public class SimpleKnifeMover : MonoBehaviour
         if (skinGO) skinTf = skinGO.transform;
         if (!Skin && skinTf) Skin = skinTf;
 
-        // Use Scalpel if assigned, otherwise fallback to CombatKnife
-        Transform tool = Scalpel ? Scalpel : CombatKnife;
+        try
+        {
+            // Reset the same transform you move during gameplay (Scalpel preferred)
+            Transform tool = Scalpel ? Scalpel : CombatKnife;
+            if (tool)
+            {
+                tool.position = _initialScalpelPos;
+                tool.rotation = _initialScalpelRot;
+            }
+        }
+        catch { /* ignore */ }
 
         // Auto-detect or use manual value
         if (AutoDetectSkinSurface && Skin != null)
@@ -110,7 +132,39 @@ public class SimpleKnifeMover : MonoBehaviour
         {
             InitializeSerialPort();
         }
+
+        if (Scalpel)
+        {
+            _initialScalpelPos = Scalpel.position;
+            _initialScalpelRot = Scalpel.rotation;
+        }
+
     }
+
+    public void ResetPoseAndRehome()
+    {
+        // reactivate objects if they were hidden
+        if (Scalpel) Scalpel.gameObject.SetActive(true);
+        if (ScalpelTip) ScalpelTip.gameObject.SetActive(true);
+
+        // reset transform
+        if (Scalpel)
+        {
+            Scalpel.position = _initialScalpelPos;
+            Scalpel.rotation = _initialScalpelRot;
+        }
+
+        // zero motion accumulators and force next serial origin
+        accumMeters = Vector3.zero;
+        prevX_mm = prevY_mm = prevZ_mm = 0f;
+        prevYaw_deg = prevPitch_deg = prevRoll_deg = 0f;
+        firstPacketReceived = false;
+
+        var rb = Scalpel ? Scalpel.GetComponentInParent<Rigidbody>() : null;
+        if (rb) { rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+    }
+
+    bool CanPaintNow() => incisionGame.AllowPainting;
 
     void InitializeSerialPort()
     {
@@ -259,13 +313,13 @@ public class SimpleKnifeMover : MonoBehaviour
         if (Input.GetKey(KeyCode.A)) movement.x -= 1f;
         if (Input.GetKey(KeyCode.D)) movement.x += 1f;
 
-        // W/S - Up/Down
-        if (Input.GetKey(KeyCode.W)) movement.y += 1f;
-        if (Input.GetKey(KeyCode.S)) movement.y -= 1f;
+        // Q/E - Up/Down
+        if (Input.GetKey(KeyCode.Q)) movement.y += 1f;
+        if (Input.GetKey(KeyCode.E)) movement.y -= 1f;
 
-        // Q/E - Forward/Backward
-        if (Input.GetKey(KeyCode.Q)) movement.z -= 1f;
-        if (Input.GetKey(KeyCode.E)) movement.z += 1f;
+        // W/S - Forward/Backward
+        if (Input.GetKey(KeyCode.S)) movement.z -= 1f;
+        if (Input.GetKey(KeyCode.W)) movement.z += 1f;
 
         // Apply movement
         Scalpel.Translate(movement * moveSpeed * Time.deltaTime, Space.World);
@@ -286,6 +340,7 @@ public class SimpleKnifeMover : MonoBehaviour
 
     void PaintWound()
     {
+        if (!incisionGame.AllowPainting) return;
         // Automatically check depth and paint wound
         if (Painter)
         {
@@ -350,8 +405,9 @@ public class SimpleKnifeMover : MonoBehaviour
         if (!ScalpelTip || !Skin) return;
         if (!Cam) Cam = Camera.main;
 
+        // if (UseSerialInput) ProcessSerialData();
+        // else                
         ManualKeyboardControl();
-        //ProcessSerialData();
     }
 
 }
