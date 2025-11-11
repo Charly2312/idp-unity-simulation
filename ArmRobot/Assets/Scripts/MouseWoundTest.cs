@@ -11,7 +11,7 @@ using Debug = UnityEngine.Debug;
 public class SimpleKnifeMover : MonoBehaviour
 {
     // === Serial Communication ===
-    private string portName = "COM4";
+    private string portName = "COM14";
     public int baud = 115200;
     public int readTimeoutMs = 200;
 
@@ -85,6 +85,7 @@ public class SimpleKnifeMover : MonoBehaviour
     public bool useOriginRelativeRotation = true;  
     [Range(0f, 1f)] public float rotationLerp = 0.5f; // 1 = snap, <1 = smooth Slerp per update
     public float serialRotationScale = 1f;          // used only in incremental mode
+    public bool serialAnglesAreDegrees = true;
 
     // Track serial orientation
     private float originYaw_deg, originPitch_deg, originRoll_deg; // from first packet
@@ -245,7 +246,7 @@ public class SimpleKnifeMover : MonoBehaviour
         {
             lock (_serialLock)
             {
-                sp.WriteLine("hii");
+                sp.WriteLine("0x01");
             }
             _lastSendTime = Time.time;
             // Debug.Log("TX: hii");
@@ -277,6 +278,13 @@ public class SimpleKnifeMover : MonoBehaviour
 
     void ProcessSerialData()
     {
+
+        if (incisionGame.FreezeTool)
+        {
+            DrainSerialInbox();
+            return;
+        }
+
         // Drain queue and keep only the most recent message
         string last = null;
         while (inbox.TryDequeue(out var msg)) last = msg;
@@ -290,23 +298,19 @@ public class SimpleKnifeMover : MonoBehaviour
         if (!float.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var x_mm)) return;
         if (!float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var y_mm)) return;
         if (!float.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var z_mm)) return;
-        // if (!float.TryParse(parts[3].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var yaw)) return;
-        // if (!float.TryParse(parts[4].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var pitch)) return;
-        // if (!float.TryParse(parts[5].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var roll)) return;
 
-        // Parse orientation (radians) → convert to degrees
-        if (!float.TryParse(parts[3].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var yawRad)) return;
-        if (!float.TryParse(parts[4].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var pitchRad)) return;
-        if (!float.TryParse(parts[5].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rollRad)) return;
+        if (!float.TryParse(parts[3].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var yawIn)) return;
+        if (!float.TryParse(parts[4].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var pitchIn)) return;
+        if (!float.TryParse(parts[5].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rollIn)) return;
 
-        // Radians -> Degrees
-        float yaw   = yawRad   * Mathf.Rad2Deg;
-        float pitch = pitchRad * Mathf.Rad2Deg;
-        float roll  = rollRad  * Mathf.Rad2Deg;
+        // Normalize to DEGREES internally
+        float yaw   = serialAnglesAreDegrees ? yawIn   : yawIn   * Mathf.Rad2Deg;
+        float pitch = serialAnglesAreDegrees ? pitchIn : pitchIn * Mathf.Rad2Deg;
+        float roll  = serialAnglesAreDegrees ? rollIn  : rollIn  * Mathf.Rad2Deg;
         // roll isnt working well 
-        // Debug.Log(    $"x={x_mm:F2} y={y_mm:F2} z={z_mm:F2} mm | " +
-        //               $"yaw={yawRad:F3} pitch={pitchRad:F3} roll={rollRad:F3} rad | " +
-        //               $"yaw={yaw:F1} pitch={pitch:F1} roll={roll:F1} deg");
+        Debug.Log(    $"x={x_mm:F2} y={y_mm:F2} z={z_mm:F2} mm | " +
+                      $"yaw={yawIn:F3} pitch={pitchIn:F3} roll={rollIn:F3} rad | " +
+                      $"yaw={yaw:F1} pitch={pitch:F1} roll={roll:F1} deg");
 
         if (!firstPacketReceived)
         {
@@ -366,6 +370,11 @@ public class SimpleKnifeMover : MonoBehaviour
         }
 
         PaintWound();
+    }
+
+    void DrainSerialInbox()
+    {
+        while (inbox.TryDequeue(out _)) { }
     }
 
     void ManualKeyboardControl()
@@ -476,10 +485,19 @@ public class SimpleKnifeMover : MonoBehaviour
     {
         if (!ScalpelTip || !Skin) return;
         if (!Cam) Cam = Camera.main;
+        if (incisionGame.FreezeTool)
+        {
+            if (UseSerialInput) DrainSerialInbox(); // keep port alive, avoid queue growth
+            // Optionally hard-stop physics drift
+            if (rb) { rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+            return;
+        }
 
-        // if (UseSerialInput) ProcessSerialData();
+
+        // if (UseSerialInput) 
         // else                
-        ManualKeyboardControl();
+        // ManualKeyboardControl();
+        ProcessSerialData();
     }
 
 }
