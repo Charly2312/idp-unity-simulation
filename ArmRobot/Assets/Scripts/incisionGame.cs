@@ -397,7 +397,7 @@ public class incisionGame : MonoBehaviour
         rect.minZ += inset; rect.maxZ -= inset;
 
         // Clamp in case shrink collapsed the rect
-        float minWidth = 0.02f, minHeight = 0.02f; // 2 cm fallback
+        float minWidth = 0.3f, minHeight = 0.3f; // 2 cm fallback
         float w = Mathf.Max(0f, rect.maxX - rect.minX);
         float h = Mathf.Max(0f, rect.maxZ - rect.minZ);
         if (w < minWidth || h < minHeight)

@@ -11,7 +11,10 @@ using Debug = UnityEngine.Debug;
 public class SimpleKnifeMover : MonoBehaviour
 {
     // === Serial Communication ===
-    private string portName = "COM14";
+    [Header("Serial Settings")]
+    [Tooltip("Serial COM port name (e.g. COM6). Change at runtime to auto-reopen.")]
+    public bool UseSerialInput = false;  
+    public string portName = "COM6";
     public int baud = 115200;
     public int readTimeoutMs = 200;
 
@@ -25,10 +28,11 @@ public class SimpleKnifeMover : MonoBehaviour
     private float _sendCooldown = 0.05f; // seconds
     private readonly object _serialLock = new object();
 
-    public Transform CombatKnife;        // Parent of KnifeTip
-    public Transform KnifeTip;       // Assign a small sphere/GameObject
     public Transform Scalpel;            // New: assign your Scalpel GameObject here
     public Transform ScalpelTip;            // New: assign your Scalpel GameObject here
+
+    public Transform ScalpelPivot;
+    Transform Tool => ScalpelPivot ? ScalpelPivot : (Scalpel ? Scalpel : transform);
 
     public Transform Skin;           // Assign your Skin plane
     public Camera Cam;               // Leave empty to use Camera.main
@@ -37,15 +41,13 @@ public class SimpleKnifeMover : MonoBehaviour
     [SerializeField] private Vector3 startPos;
     [SerializeField] private Quaternion startRot;
 
-    Rigidbody rb;
     bool cutting;
     bool ignored;
     bool isStuck;
     Vector3 lastPos;
     Vector3 lastTipPos;
 
-    // === Movement Settings ===
-    public bool UseSerialInput = false;   // Toggle between serial and keyboard control
+    // === Movement Settings === // Toggle between serial and keyboard control
     public float rotationSpeed = 150.0f;    // Keyboard rotation speed
 
     public float moveSpeed = 0.1f;       // Movement speed for keyboard controls
@@ -57,6 +59,8 @@ public class SimpleKnifeMover : MonoBehaviour
     public bool AutoDetectSkinSurface = true; // Auto-detect from Skin object position
     public float SkinSurfaceY = 0.8464f; // Manual override if AutoDetect is false
 
+    public float CurrentDepthMeters { get; private set; } // this is used for incisionGame
+    
     [Header("Gradient Settings")]
     public float InnerRadiusPercent = 0.5f; // Inner radius as percentage of brush radius (darker red)
     public float InnerStrengthMultiplier = 1.0f; // Multiplier for inner region
@@ -87,6 +91,12 @@ public class SimpleKnifeMover : MonoBehaviour
     public float serialRotationScale = 1f;          // used only in incremental mode
     public bool serialAnglesAreDegrees = true;
 
+    [Header("Translation (Serial Scale)")]
+    [Tooltip("Per-axis multiplier applied to incoming serial deltas (robot frame) dx, dy, dz in millimeters. Use negative to invert.")]
+    public float serialScaleX = 2.0f; // scales dx_mm
+    public float serialScaleY = 1f; // scales dy_mm
+    public float serialScaleZ = 1f; // scales dz_mm
+
     // Track serial orientation
     private float originYaw_deg, originPitch_deg, originRoll_deg; // from first packet
     private float prevYaw_deg, prevPitch_deg, prevRoll_deg;       // for incremental mode
@@ -99,7 +109,7 @@ public class SimpleKnifeMover : MonoBehaviour
         if (!Application.isPlaying)
         {
             // Capture the current scene pose as the spawn (play-again) pose.
-            Transform tool = Scalpel ? Scalpel : (CombatKnife ? CombatKnife : transform);
+            var tool = Tool;
             startPos = tool.position;
             startRot = tool.rotation;
         }
@@ -107,15 +117,12 @@ public class SimpleKnifeMover : MonoBehaviour
 
     void Awake()
     {
+        var tool = Tool;
         if (Scalpel)
         {
             _initialScalpelPos = Scalpel.position;
             _initialScalpelRot = Scalpel.rotation;
         }
-        // Assign rb from the active tool or self
-        rb = (Scalpel ? Scalpel.GetComponent<Rigidbody>() :
-             CombatKnife ? CombatKnife.GetComponent<Rigidbody>() :
-             GetComponent<Rigidbody>());
     }
 
     void Start()
@@ -129,7 +136,8 @@ public class SimpleKnifeMover : MonoBehaviour
         if (!Skin && skinTf) Skin = skinTf;
 
         // If OnValidate didn’t run (built player), capture pose now
-        Transform tool = Scalpel ? Scalpel : (CombatKnife ? CombatKnife : transform);
+        var tool = Tool;
+
         if (startRot == Quaternion.identity && startPos == Vector3.zero)
         {
             startPos = tool.position;
@@ -137,9 +145,11 @@ public class SimpleKnifeMover : MonoBehaviour
         }
 
         // Do NOT reposition here; keep scene spawn
+        lastPos = tool.position;
+        tool.position = startPos;
+        tool.rotation = startRot;
         originPos = startPos;
         originRot = startRot;
-        lastPos = tool.position;
         lastTipPos = (ScalpelTip ? ScalpelTip.position : tool.position);
 
         _actualSkinSurfaceY = SkinSurfaceY;
@@ -154,7 +164,7 @@ public class SimpleKnifeMover : MonoBehaviour
 
     public void ResetKnifeAndWounds()
     {
-        Transform tool = (Scalpel != null) ? Scalpel : (CombatKnife != null ? CombatKnife : transform);
+        var tool = Tool;
 
         // Reset transform and cached origins
         tool.position = startPos;
@@ -170,13 +180,6 @@ public class SimpleKnifeMover : MonoBehaviour
         cutting = false;
         ignored = false;
         isStuck = false;
-
-        if (rb)
-        {
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-            rb.constraints = RigidbodyConstraints.None;
-        }
 
         _stampTimer = 0f;
         _wasCutting = false;
@@ -281,7 +284,8 @@ public class SimpleKnifeMover : MonoBehaviour
 
         if (incisionGame.FreezeTool)
         {
-            DrainSerialInbox();
+            //DrainSerialInbox();
+            DrainSerialInboxKeepLast();
             return;
         }
 
@@ -307,18 +311,19 @@ public class SimpleKnifeMover : MonoBehaviour
         float yaw   = serialAnglesAreDegrees ? yawIn   : yawIn   * Mathf.Rad2Deg;
         float pitch = serialAnglesAreDegrees ? pitchIn : pitchIn * Mathf.Rad2Deg;
         float roll  = serialAnglesAreDegrees ? rollIn  : rollIn  * Mathf.Rad2Deg;
-        // roll isnt working well 
-        Debug.Log(    $"x={x_mm:F2} y={y_mm:F2} z={z_mm:F2} mm | " +
-                      $"yaw={yawIn:F3} pitch={pitchIn:F3} roll={rollIn:F3} rad | " +
-                      $"yaw={yaw:F1} pitch={pitch:F1} roll={roll:F1} deg");
 
+        // Debug.Log(    $"x={x_mm:F2} y={y_mm:F2} z={z_mm:F2} mm | " +
+        //               $"yaw={yawIn:F3} pitch={pitchIn:F3} roll={rollIn:F3} rad | " +
+        //               $"yaw={yaw:F1} pitch={pitch:F1} roll={roll:F1} deg");
+
+        var tool = Tool;
         if (!firstPacketReceived)
         {
             // translation
             prevX_mm = x_mm; prevY_mm = y_mm; prevZ_mm = z_mm;
             accumMeters = Vector3.zero;
-            // Use current knife position as origin to avoid big offsets
-            if (Scalpel) { originPos = Scalpel.position; originRot = Scalpel.rotation; }
+
+            if (tool) { originPos = tool.position; originRot = tool.rotation; }
 
             // rotation
             originYaw_deg = yaw; originPitch_deg = pitch; originRoll_deg = roll;
@@ -334,6 +339,10 @@ public class SimpleKnifeMover : MonoBehaviour
         float dz_mm = (z_mm - prevZ_mm);
         prevX_mm = x_mm; prevY_mm = y_mm; prevZ_mm = z_mm;
 
+        dx_mm *= serialScaleX;
+        dy_mm *= serialScaleY;
+        dz_mm *= serialScaleZ;
+
         // Map robot → Unity axes (tune if needed)
         Vector3 deltaUnity = new Vector3(
             dy_mm * MM_TO_M,   // Robot Y → Unity X
@@ -342,9 +351,9 @@ public class SimpleKnifeMover : MonoBehaviour
         );
 
         accumMeters += deltaUnity;
-        if (Scalpel) Scalpel.position = originPos + accumMeters;
 
-        if (Scalpel)
+        if (tool) tool.position = originPos + accumMeters;
+        if (tool)
         {
             if (useOriginRelativeRotation)
             {
@@ -354,9 +363,9 @@ public class SimpleKnifeMover : MonoBehaviour
                 float offRoll  = Mathf.DeltaAngle(originRoll_deg,  roll);
 
                 Quaternion target = originRot * Quaternion.Euler(offPitch, offYaw, offRoll);
-                Scalpel.rotation = rotationLerp >= 1f
+                tool.rotation = rotationLerp >= 1f
                     ? target
-                    : Quaternion.Slerp(Scalpel.rotation, target, rotationLerp);
+                    : Quaternion.Slerp(tool.rotation, target, rotationLerp);
             }
             else
             {
@@ -365,7 +374,7 @@ public class SimpleKnifeMover : MonoBehaviour
                 float dRoll  = Mathf.DeltaAngle(prevRoll_deg,  roll)  * serialRotationScale;
 
                 prevYaw_deg = yaw; prevPitch_deg = pitch; prevRoll_deg = roll;
-                Scalpel.Rotate(new Vector3(dPitch, dYaw, dRoll), Space.Self);
+                tool.Rotate(new Vector3(dPitch, dYaw, dRoll), Space.Self);
             }
         }
 
@@ -377,9 +386,21 @@ public class SimpleKnifeMover : MonoBehaviour
         while (inbox.TryDequeue(out _)) { }
     }
 
+    void DrainSerialInboxKeepLast()
+    {
+        string last = null;
+        while (inbox.TryDequeue(out var item))
+        {
+            last = item;
+        }
+        if (last != null) inbox.Enqueue(last);
+    }
+
     void ManualKeyboardControl()
     {
         // Keyboard movement controls
+        var tool = Tool;
+        if (!tool) return;
         Vector3 movement = Vector3.zero;
 
         // A/D - Left/Right
@@ -395,7 +416,7 @@ public class SimpleKnifeMover : MonoBehaviour
         if (Input.GetKey(KeyCode.W)) movement.z += 1f;
 
         // Apply movement
-        Scalpel.Translate(movement * moveSpeed * Time.deltaTime, Space.World);
+        tool.Translate(movement * moveSpeed * Time.deltaTime, Space.World);
 
         // Rotation controls (optional)
         float yaw = 0f, pitch = 0f, roll = 0f;
@@ -407,7 +428,7 @@ public class SimpleKnifeMover : MonoBehaviour
         if (Input.GetKey(KeyCode.O)) roll = 1f;
 
         Vector3 rotation = new Vector3(pitch, yaw, roll);
-        Scalpel.Rotate(rotation * rotationSpeed * Time.deltaTime, Space.Self);
+        tool.Rotate(rotation * rotationSpeed * Time.deltaTime, Space.Self);
         PaintWound();
     }
 
@@ -423,15 +444,17 @@ public class SimpleKnifeMover : MonoBehaviour
             float rawDepth = 0.8764f - ScalpelTipY;
             float actualDepth = Mathf.Max(0f, rawDepth); // Only clamp negative values to 0
             
+            CurrentDepthMeters = actualDepth; //for game
+
             bool CutSkin = actualDepth > 0f;
             string status = rawDepth < 0 ? "ABOVE SKIN (in air)" : "BELOW SKIN (CUTTING)";
             //Debug.Log($"ScalpelTip Y: {ScalpelTipY:F4} | Skin Surface: {0.8764} | Raw Depth: {rawDepth:F4} | Actual Depth: {actualDepth:F4} | {status}");
 
-            if (!_wasCutting && CutSkin)
-            {
-                SendMsgIfAllowed();
-                Debug.Log("sent message to ard");
-            }
+            // if (!_wasCutting && CutSkin)
+            // {
+            //     SendMsgIfAllowed();
+            //     //Debug.Log("sent message to ard");
+            // }
 
             _wasCutting = CutSkin;
             // Automatically paint if knife is below skin surface (depth > 0)
@@ -487,17 +510,17 @@ public class SimpleKnifeMover : MonoBehaviour
         if (!Cam) Cam = Camera.main;
         if (incisionGame.FreezeTool)
         {
-            if (UseSerialInput) DrainSerialInbox(); // keep port alive, avoid queue growth
-            // Optionally hard-stop physics drift
-            if (rb) { rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+            //if (UseSerialInput) DrainSerialInbox(); // keep port alive, avoid queue growth
+            if (UseSerialInput) DrainSerialInboxKeepLast();
+
             return;
         }
 
 
-        // if (UseSerialInput) 
-        // else                
-        // ManualKeyboardControl();
-        ProcessSerialData();
+        if (UseSerialInput) {ProcessSerialData();}
+        else                
+        {ManualKeyboardControl();}
+        
     }
 
 }
