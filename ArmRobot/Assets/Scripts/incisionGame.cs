@@ -71,6 +71,11 @@ public class incisionGame : MonoBehaviour
     [Tooltip("Optional name of a public method on Painter used to clear the texture.")]
     public string PainterClearMethodName = "Clear";
 
+    [Header("Button Colors")]
+    public Color PlayAgainColor = new Color(0.85f, 0.95f, 1f);
+    public Color FreeModeColor  = new Color(0.95f, 0.85f, 1f);
+    public Color StartButtonColor = new Color(0.85f, 1f, 0.85f);
+
     enum GameState { Idle, Playing, Completed, GameOver, TimeUp, EndScreen, FreeMode, Freeze }
 
     [Header("Path Direction & Start Highlight")]
@@ -291,7 +296,7 @@ public class incisionGame : MonoBehaviour
             var box = new GUIStyle(GUI.skin.box) { fontSize = 16, alignment = TextAnchor.UpperCenter };
             string scoreText = (_lastEndState == GameState.GameOver) ? "game over! you cut too deep!" : _finalScore.ToString("F1");
             GUI.Box(new Rect(Screen.width / 2f - 160, 30, 320, 100),
-                $"Round Ended: {_endReason}\nScore: {scoreText}", box);
+                $"Round Ended: {_endReason}\n\n\nScore: {scoreText}", box);
         }
     }
 
@@ -348,7 +353,7 @@ public class incisionGame : MonoBehaviour
             if (endState == GameState.GameOver)
                 _btnPlayAgain.SetText("Play Again\n\n\ngame over!\n\n\ncut too deep silly!");
             else
-                _btnPlayAgain.SetText($"Play Again\nScore: {_finalScore:F1}");
+                _btnPlayAgain.SetText($"Play Again\n\n\nScore: {_finalScore:F1}");
         }
 
         _state = GameState.EndScreen;
@@ -624,14 +629,19 @@ public class incisionGame : MonoBehaviour
         ShowStartButton();
         _state = GameState.Freeze;
     }
-        void ShowStartButton()
+
+    void ShowStartButton()
     {
         if (!Cam) Cam = Camera.main;
         Vector3 center = Cam.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, EndUIButtonDistance));
         Quaternion face = Quaternion.LookRotation(center - Cam.transform.position, Cam.transform.up);
 
         _btnStart = PenetrationButton.Create("Start", center, face, OnStartClicked, ScalpelTip);
-        if (_btnStart) _btnStart.transform.localScale = new Vector3(0.18f, 0.06f, 0.02f);
+        if (_btnStart)
+        {
+            _btnStart.transform.localScale = new Vector3(0.18f, 0.06f, 0.02f);
+            _btnStart.SetColor(StartButtonColor);
+        }
     }
 
     void HideStartButton()
@@ -644,25 +654,28 @@ public class incisionGame : MonoBehaviour
     {
         HideEndButtons();
         if (!Cam) Cam = Camera.main;
-        if (!Cam)
-        {
-            Debug.LogWarning("incisionGame: No camera found for end buttons.");
-            return;
-        }
+        if (!Cam) { Debug.LogWarning("incisionGame: No camera found for end buttons."); return; }
+
         Vector3 center = Cam.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, EndUIButtonDistance));
         Quaternion face = Quaternion.LookRotation(center - Cam.transform.position, Cam.transform.up);
-
         Vector3 up = Cam.transform.up;
         float gap = EndUIButtonVerticalGap * 0.5f;
 
         _btnPlayAgain = PenetrationButton.Create("Play Again",
             center + up * gap, face, OnPlayAgainClicked, ScalpelTip);
-
         _btnMainMenu = PenetrationButton.Create("Free Mode",
             center - up * gap, face, OnMainMenuClicked, ScalpelTip);
 
-        if (_btnPlayAgain) _btnPlayAgain.transform.localScale = new Vector3(0.4f, 0.1f, 0.02f); // bigger
-        if (_btnMainMenu) _btnMainMenu.transform.localScale = new Vector3(0.3f, 0.08f, 0.02f); // bigger
+        if (_btnPlayAgain)
+        {
+            _btnPlayAgain.transform.localScale = new Vector3(0.4f, 0.1f, 0.02f);
+            _btnPlayAgain.SetColor(PlayAgainColor);
+        }
+        if (_btnMainMenu)
+        {
+            _btnMainMenu.transform.localScale = new Vector3(0.3f, 0.08f, 0.02f);
+            _btnMainMenu.SetColor(FreeModeColor);
+        }
     }
 
     void HideEndButtons()
@@ -879,6 +892,16 @@ public class PenetrationButton : MonoBehaviour
             FitText();
         }
         name = $"Button - {text.Replace('\n', ' ')}";
+    }
+
+    public void SetColor(Color c)
+    {
+        var mr = GetComponent<MeshRenderer>();
+        if (mr)
+        {
+            if (mr.material == null) mr.material = new Material(Shader.Find("Standard"));
+            mr.material.color = c;
+        }
     }
 
     void FitText()

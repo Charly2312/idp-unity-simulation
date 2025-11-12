@@ -471,7 +471,7 @@ Transform:
   m_GameObject: {fileID: 500504758}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 55.039, y: 0.9272, z: -2.209}
+  m_LocalPosition: {x: 55.039, y: 0.9272, z: -2.153}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -500,7 +500,7 @@ MonoBehaviour:
   Skin: {fileID: 1452672172}
   Cam: {fileID: 0}
   Painter: {fileID: 1452672174}
-  startPos: {x: 55.039, y: 0.9272, z: -2.209}
+  startPos: {x: 55.039, y: 0.9272, z: -2.153}
   startRot: {x: 0, y: 0, z: 0, w: 1}
   rotationSpeed: 150
   moveSpeed: 0.1
@@ -517,7 +517,7 @@ MonoBehaviour:
   rotationLerp: 0.5
   serialRotationScale: 1
   serialAnglesAreDegrees: 1
-  serialScaleX: 3.5
+  serialScaleX: 4
   serialScaleY: 1
   serialScaleZ: 1
   yawSign: -1
@@ -1295,8 +1295,7 @@ MonoBehaviour:
   PathColor: {r: 1, g: 1, b: 1, a: 1}
   PathWidth: 0.005
   LineYOffset: 0.001
-  UseIMGUIOverlay: 0
-  RoundSeconds: 60
+  RoundSeconds: 30
   StartGraceSeconds: 1
   ClearPainterOnStart: 1
   ClearPainterOnReset: 1
@@ -1304,6 +1303,9 @@ MonoBehaviour:
   EndUIButtonDistance: 0.7
   EndUIButtonVerticalGap: 0.12
   PainterClearMethodName: Clear
+  PlayAgainColor: {r: 0.10012458, g: 0.8490566, b: 0.16182022, a: 1}
+  FreeModeColor: {r: 0, g: 0.8679245, b: 0.8046412, a: 1}
+  StartButtonColor: {r: 0.8584906, g: 0.068841234, b: 0.77095807, a: 1}
   ForceTopToBottom: 1
   StartTouchRadius: 0.015
   StartHighlightColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}

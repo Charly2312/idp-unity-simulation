@@ -69,4 +69,9 @@ sysinfo.txt
 # Crashlytics generated file
 crashlytics-build.properties
 
-/ArmRobot/Library/
+Library/ArtifactDB
+Library/Search/
+Library/ShaderCache.db
+Library/SourceAssetDB
+Library/UndoData.bin
+Library/UndoStack.bin
