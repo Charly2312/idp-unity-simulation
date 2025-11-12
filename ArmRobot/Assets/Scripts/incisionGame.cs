@@ -65,7 +65,7 @@ public class incisionGame : MonoBehaviour
 
     [Header("End UI Settings")]
     [Tooltip("Distance in front of camera for end buttons.")]
-    public float EndUIButtonDistance = 0.7f;
+    public float EndUIButtonDistance = 1.5f;
     [Tooltip("Vertical spacing between stacked end buttons.")]
     public float EndUIButtonVerticalGap = 0.12f;
     [Tooltip("Optional name of a public method on Painter used to clear the texture.")]
@@ -83,6 +83,7 @@ public class incisionGame : MonoBehaviour
     public float StartHighlightScale = 1.6f;
 
     GameState _state = GameState.Idle;
+    GameState _lastEndState = GameState.Idle;
 
     // Timer
     float _timeLeft;
@@ -117,7 +118,8 @@ public class incisionGame : MonoBehaviour
     bool _startTouched = false;
     public static bool AllowPainting = false;
     public static bool FreezeTool = false; // knife movement pause
-
+    bool _endTouched = false;
+    
     void Awake()
     {
         if (!Cam) Cam = Camera.main;
@@ -221,6 +223,20 @@ public class incisionGame : MonoBehaviour
                 }
             }
 
+            if (_startTouched && !_endTouched)
+            {
+                float distEndXZ = Vector2.Distance(
+                    new Vector2(pt.x, pt.z),
+                    new Vector2(_pEnd.x, _pEnd.z));
+
+                if (depth > 0f && distEndXZ <= StartTouchRadius)
+                {
+                    _endTouched = true;
+                    EndRound(GameState.Completed, "Incision completed!");
+                    return;
+                }
+            }
+
             // Count sample if actually cutting
             if (depth > 0f)
             {
@@ -273,8 +289,9 @@ public class incisionGame : MonoBehaviour
         else if (_state == GameState.EndScreen || _state == GameState.Completed || _state == GameState.GameOver || _state == GameState.TimeUp)
         {
             var box = new GUIStyle(GUI.skin.box) { fontSize = 16, alignment = TextAnchor.UpperCenter };
+            string scoreText = (_lastEndState == GameState.GameOver) ? "game over! you cut too deep!" : _finalScore.ToString("F1");
             GUI.Box(new Rect(Screen.width / 2f - 160, 30, 320, 100),
-                $"Round Ended: {_endReason}\nScore: {_finalScore:F1}", box);
+                $"Round Ended: {_endReason}\nScore: {scoreText}", box);
         }
     }
 
@@ -319,15 +336,47 @@ public class incisionGame : MonoBehaviour
     void EndRound(GameState endState, string reason)
     {
         _state = endState;
+        _lastEndState = endState;
         _endReason = reason;
         incisionGame.AllowPainting = false;
 
-        // ...existing scoring...
+        _finalScore = ComputeFinalScore(endState);
+
         ShowEndButtons(); // shows Play Again + Free Mode
+        if (_btnPlayAgain)
+        {
+            if (endState == GameState.GameOver)
+                _btnPlayAgain.SetText("Play Again\n\n\ngame over!\n\n\ncut too deep silly!");
+            else
+                _btnPlayAgain.SetText($"Play Again\nScore: {_finalScore:F1}");
+        }
+
         _state = GameState.EndScreen;
 
         AllowPainting = false;
         if (Painter) Painter.enabled = false;
+    }
+
+    float ComputeFinalScore(GameState endState)
+    {
+        // Depth GameOver => hard zero
+        if (endState == GameState.GameOver)
+            return 0f;
+
+        // Deviation: average absolute lateral error (meters)
+        float avgErr = (_samples > 0) ? (float)(_sumAbsError / _samples) : LateralTolerance;
+
+        // Map to 0..100 where <= LateralTolerance => ~100, >= 2x => 0
+        float devNorm = 1f - (avgErr / (LateralTolerance * 2f));
+        float deviationScore = Mathf.Clamp01(devNorm) * 100f;
+
+        // Time: fraction of time remaining (more remaining => better)
+        float timeFrac = (RoundSeconds > 0f) ? Mathf.Clamp01(_timeLeft / RoundSeconds) : 0f;
+        float timeScore = timeFrac * 100f;
+
+        // 50/50 weighting
+        float finalScore = 0.5f * deviationScore + 0.5f * timeScore;
+        return Mathf.Clamp(finalScore, 0f, 100f);
     }
 
     void ResetScore()
@@ -337,6 +386,7 @@ public class incisionGame : MonoBehaviour
         _samples = 0;
         _finalScore = 0f;
         _startTouched = false;
+        _endTouched = false;
         if (_startHighlight) _startHighlight.SetActive(false);
     }
 
@@ -530,6 +580,7 @@ public class incisionGame : MonoBehaviour
         MakeTrigger(_endDot);
 
         _startTouched = false;
+        _endTouched = false;
     }
 
     void DestroyMarkers()
@@ -607,12 +658,11 @@ public class incisionGame : MonoBehaviour
         _btnPlayAgain = PenetrationButton.Create("Play Again",
             center + up * gap, face, OnPlayAgainClicked, ScalpelTip);
 
-        // Rename to Free Mode
         _btnMainMenu = PenetrationButton.Create("Free Mode",
             center - up * gap, face, OnMainMenuClicked, ScalpelTip);
 
-        if (_btnPlayAgain) _btnPlayAgain.transform.localScale = new Vector3(0.18f, 0.06f, 0.02f);
-        if (_btnMainMenu) _btnMainMenu.transform.localScale = new Vector3(0.18f, 0.06f, 0.02f);
+        if (_btnPlayAgain) _btnPlayAgain.transform.localScale = new Vector3(0.4f, 0.1f, 0.02f); // bigger
+        if (_btnMainMenu) _btnMainMenu.transform.localScale = new Vector3(0.3f, 0.08f, 0.02f); // bigger
     }
 
     void HideEndButtons()
@@ -821,13 +871,33 @@ public class PenetrationButton : MonoBehaviour
     float _lastTriggerTime;
     TextMesh _label;
 
+    public void SetText(string text)
+    {
+        if (_label)
+        {
+            _label.text = text;
+            FitText();
+        }
+        name = $"Button - {text.Replace('\n', ' ')}";
+    }
+
+    void FitText()
+    {
+        if (!_label) return;
+        // Basic length-based character scaling (keeps multi-line readable)
+        int len = _label.text.Replace("\n", "").Length;
+        if (len <= 12) _label.characterSize = 0.014f;
+        else if (len <= 20) _label.characterSize = 0.0125f;
+        else _label.characterSize = 0.011f;
+    }
+
     public static PenetrationButton Create(string text, Vector3 pos, Quaternion rot, Action onClick, Transform tip)
     {
         GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
         go.name = $"Button - {text}";
         go.transform.position = pos;
         go.transform.rotation = rot;
-        go.transform.localScale = new Vector3(0.12f, 0.04f, 0.02f);
+        go.transform.localScale = new Vector3(0.22f, 0.08f, 0.02f);
 
         var mr = go.GetComponent<MeshRenderer>();
         if (mr)
@@ -847,16 +917,18 @@ public class PenetrationButton : MonoBehaviour
         // Add text label
         GameObject label = new GameObject("Label");
         label.transform.SetParent(go.transform, worldPositionStays: false);
-        label.transform.localPosition = new Vector3(0f, 0f, -0.013f); // slightly in front
+        label.transform.localPosition = new Vector3(0f, 0f, -0.0115f); // slightly in front
         label.transform.localRotation = Quaternion.identity;
         var tm = label.AddComponent<TextMesh>();
         tm.text = text;
         tm.alignment = TextAlignment.Center;
         tm.anchor = TextAnchor.MiddleCenter;
         tm.color = Color.black;
-        tm.fontSize = 64;
-        tm.characterSize = 0.015f;
+        tm.fontSize = 90;
+        tm.characterSize = 0.02f;
+        tm.lineSpacing = 0.6f;
         btn._label = tm;
+        btn.FitText();
 
         return btn;
     }
