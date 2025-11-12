@@ -23,6 +23,11 @@ public class SimpleKnifeMover : MonoBehaviour
     volatile bool running;
     readonly ConcurrentQueue<string> inbox = new ConcurrentQueue<string>();
 
+    struct PoseSample { public float x_mm, y_mm, z_mm, yaw, pitch, roll; }
+    readonly object _poseLock = new object();
+    bool _hasLatestPose = false;
+    PoseSample _latestPose;
+
     private bool _wasCutting = false;
     private float _lastSendTime = -999f;
     private float _sendCooldown = 0.05f; // seconds
@@ -68,6 +73,7 @@ public class SimpleKnifeMover : MonoBehaviour
 
     [Header("Debug")]
     public float DepthThreshold = 0.001f; // Minimum depth to consider "cutting" (1mm)
+    private float _lastDepthSent = -1f;
 
     // Manual UV mapping based on skin vertices
     private Vector2 _skinMin = new Vector2(54.69f, -2.26f); // (minX, minZ)
@@ -79,7 +85,7 @@ public class SimpleKnifeMover : MonoBehaviour
 
     // === Serial Data Processing ===
     private const float MM_TO_M = 0.001f;
-    private Vector3 originPos = new Vector3(55.0154f, 0.846f, -2.247592f);
+    private Vector3 originPos = new Vector3(55.0154f, 0.846f, -2.153f);
     private Quaternion originRot;
     Vector3 accumMeters;
     private float prevX_mm, prevY_mm, prevZ_mm;
@@ -157,7 +163,7 @@ public class SimpleKnifeMover : MonoBehaviour
         originRot = startRot;
         lastTipPos = (ScalpelTip ? ScalpelTip.position : tool.position);
 
-        _actualSkinSurfaceY = SkinSurfaceY;
+        _actualSkinSurfaceY = AutoDetectSkinSurface && Skin ? Skin.position.y : SkinSurfaceY;
 
         if (UseSerialInput) InitializeSerialPort();
     }
@@ -272,10 +278,29 @@ public class SimpleKnifeMover : MonoBehaviour
             try
             {
                 string line = sp.ReadLine();
-                if (!string.IsNullOrWhiteSpace(line))
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                // Parse here (off main thread)
+                // Expected: [x, y, z, yaw, pitch, roll, ...]
+                var parts = line.Trim().Trim('[', ']').Split(',');
+                if (parts.Length < 6) continue;
+
+                if (!float.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var x_mm)) continue;
+                if (!float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var y_mm)) continue;
+                if (!float.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var z_mm)) continue;
+
+                if (!float.TryParse(parts[3].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var yawIn)) continue;
+                if (!float.TryParse(parts[4].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var pitchIn)) continue;
+                if (!float.TryParse(parts[5].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rollIn)) continue;
+
+                float yaw   = serialAnglesAreDegrees ? yawIn   : yawIn   * Mathf.Rad2Deg;
+                float pitch = serialAnglesAreDegrees ? pitchIn : pitchIn * Mathf.Rad2Deg;
+                float roll  = serialAnglesAreDegrees ? rollIn  : rollIn  * Mathf.Rad2Deg;
+
+                lock (_poseLock)
                 {
-                    // Debug.Log($"📥 RAW RECEIVED: '{line.Trim()}'");
-                    inbox.Enqueue(line.Trim());
+                    _latestPose = new PoseSample { x_mm = x_mm, y_mm = y_mm, z_mm = z_mm, yaw = yaw, pitch = pitch, roll = roll };
+                    _hasLatestPose = true;
                 }
             }
             catch (TimeoutException) { /* ignore */ }
@@ -289,37 +314,27 @@ public class SimpleKnifeMover : MonoBehaviour
 
         if (incisionGame.FreezeTool)
         {
-            //DrainSerialInbox();
-            DrainSerialInboxKeepLast();
             return;
         }
 
         // Drain queue and keep only the most recent message
-        string last = null;
-        while (inbox.TryDequeue(out var msg)) last = msg;
-        if (string.IsNullOrEmpty(last)) return;
-
-        // Expected: [x, y, z, yaw, pitch, roll, ...]
-        var parts = last.Trim('[', ']').Split(',');
-        if (parts.Length < 6) return;
-
-        // Fast, allocation-light parsing
-        if (!float.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var x_mm)) return;
-        if (!float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var y_mm)) return;
-        if (!float.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var z_mm)) return;
-
-        if (!float.TryParse(parts[3].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var yawIn)) return;
-        if (!float.TryParse(parts[4].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var pitchIn)) return;
-        if (!float.TryParse(parts[5].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rollIn)) return;
-
-        // Normalize to DEGREES internally
-        float yaw   = serialAnglesAreDegrees ? yawIn   : yawIn   * Mathf.Rad2Deg;
-        float pitch = serialAnglesAreDegrees ? pitchIn : pitchIn * Mathf.Rad2Deg;
-        float roll  = serialAnglesAreDegrees ? rollIn  : rollIn  * Mathf.Rad2Deg;
+        PoseSample pose;
+        lock (_poseLock)
+        {
+            if (!_hasLatestPose) return;
+            pose = _latestPose;
+        }
 
         // Debug.Log(    $"x={x_mm:F2} y={y_mm:F2} z={z_mm:F2} mm | " +
         //               $"yaw={yawIn:F3} pitch={pitchIn:F3} roll={rollIn:F3} rad | " +
         //               $"yaw={yaw:F1} pitch={pitch:F1} roll={roll:F1} deg");
+
+        float x_mm = pose.x_mm;
+        float y_mm = pose.y_mm;
+        float z_mm = pose.z_mm;
+        float yaw  = pose.yaw;
+        float pitch = pose.pitch;
+        float roll = pose.roll;
 
         var tool = Tool;
         if (!firstPacketReceived)
@@ -365,7 +380,7 @@ public class SimpleKnifeMover : MonoBehaviour
                 // Map absolute serial pose relative to first packet (no drift, “home” behavior)
                 float offYaw   = Mathf.DeltaAngle(originYaw_deg,   yaw) * yawSign;  
                 float offPitch = Mathf.DeltaAngle(originPitch_deg, pitch) * pitchSign;
-                float offRoll  = Mathf.DeltaAngle(originRoll_deg,  roll * rollSign);
+                float offRoll  = Mathf.DeltaAngle(originRoll_deg,  roll)  * rollSign;
 
                 Quaternion target = originRot * Quaternion.Euler(offPitch, offYaw, offRoll);
                 tool.rotation = rotationLerp >= 1f
@@ -509,23 +524,22 @@ public class SimpleKnifeMover : MonoBehaviour
         }
     }
 
+
     void Update()
     {
         if (!ScalpelTip || !Skin) return;
         if (!Cam) Cam = Camera.main;
+
         if (incisionGame.FreezeTool)
         {
-            //if (UseSerialInput) DrainSerialInbox(); // keep port alive, avoid queue growth
-            if (UseSerialInput) DrainSerialInboxKeepLast();
-
+            if (UseSerialInput) { /* keep last pose only */ }
             return;
         }
 
-
-        if (UseSerialInput) {ProcessSerialData();}
-        else                
-        {ManualKeyboardControl();}
+        if (UseSerialInput)
+            ProcessSerialData();
+        else
+            ManualKeyboardControl();
         
     }
-
 }

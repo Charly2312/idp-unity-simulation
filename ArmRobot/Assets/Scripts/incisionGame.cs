@@ -39,14 +39,19 @@ public class incisionGame : MonoBehaviour
     [Tooltip("Max deviation from vertical (camera up projected onto skin) in degrees.")]
     public float MaxVerticalDeviationDeg = 15f;
 
+    [Header("Robotic Controller Hook (optional)")]
+    public SimpleKnifeMover RobotMover;         // If assigned, you can re-home/origin only when Play Again is clicked
+
     [Header("Visuals")]
     public Color PathColor = Color.white;
     public float PathWidth = 0.005f;
     [Tooltip("Lift the line and markers slightly above the skin to avoid z-fighting.")]
     public float LineYOffset = 0.001f;
 
+    private bool UseIMGUIOverlay = false; 
+
     [Header("Round Settings")]
-    public float RoundSeconds = 60f;
+    public float RoundSeconds = 30f;
     float _roundStartTime;
 
     [Tooltip("Ignore depth fail for a short time right after the round starts.")]
@@ -57,9 +62,6 @@ public class incisionGame : MonoBehaviour
     public bool ClearPainterOnReset = true;     // Clears painter on Play Again
     [Tooltip("Try to find RenderTextures on Painter via reflection and clear them if no method is provided.")]
     public bool TryRenderTextureClearFallback = true; // NEW
-
-    [Header("Robotic Controller Hook (optional)")]
-    public SimpleKnifeMover RobotMover;         // If assigned, you can re-home/origin only when Play Again is clicked
 
     [Header("End UI Settings")]
     [Tooltip("Distance in front of camera for end buttons.")]
@@ -200,12 +202,6 @@ public class incisionGame : MonoBehaviour
                 return;
             }
 
-            if (depth > MaxDepth)
-            {
-                EndRound(GameState.GameOver, $"Depth exceeded MaxDepth ({MaxDepth * 1000f:F0} mm).");
-                return;
-            }
-
             // Project tip to skin plane and update progress/error
             Vector3 pt = ProjectToSkinPlane(ScalpelTip.position);
             float tAlong, lateral;
@@ -265,6 +261,7 @@ public class incisionGame : MonoBehaviour
     void OnGUI()
     {
         // Simple, lightweight UI for timer and status
+        if (!UseIMGUIOverlay) return;
         if (_state == GameState.Playing)
         {
             var style = new GUIStyle(GUI.skin.label);
