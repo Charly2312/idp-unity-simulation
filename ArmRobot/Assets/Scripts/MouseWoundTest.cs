@@ -97,6 +97,11 @@ public class SimpleKnifeMover : MonoBehaviour
     public float serialScaleY = 1f; // scales dy_mm
     public float serialScaleZ = 1f; // scales dz_mm
 
+    [Tooltip("Multiply yaw by this. Use -1 to flip yaw direction.")]
+    public float yawSign = -1f;
+    public float pitchSign = 1f; 
+    public float rollSign = 1f;
+
     // Track serial orientation
     private float originYaw_deg, originPitch_deg, originRoll_deg; // from first packet
     private float prevYaw_deg, prevPitch_deg, prevRoll_deg;       // for incremental mode
@@ -358,9 +363,9 @@ public class SimpleKnifeMover : MonoBehaviour
             if (useOriginRelativeRotation)
             {
                 // Map absolute serial pose relative to first packet (no drift, “home” behavior)
-                float offYaw   = Mathf.DeltaAngle(originYaw_deg,   yaw);
-                float offPitch = Mathf.DeltaAngle(originPitch_deg, pitch);
-                float offRoll  = Mathf.DeltaAngle(originRoll_deg,  roll);
+                float offYaw   = Mathf.DeltaAngle(originYaw_deg,   yaw) * yawSign;  
+                float offPitch = Mathf.DeltaAngle(originPitch_deg, pitch) * pitchSign;
+                float offRoll  = Mathf.DeltaAngle(originRoll_deg,  roll * rollSign);
 
                 Quaternion target = originRot * Quaternion.Euler(offPitch, offYaw, offRoll);
                 tool.rotation = rotationLerp >= 1f
@@ -369,9 +374,9 @@ public class SimpleKnifeMover : MonoBehaviour
             }
             else
             {
-                float dYaw   = Mathf.DeltaAngle(prevYaw_deg,   yaw)   * serialRotationScale;
-                float dPitch = Mathf.DeltaAngle(prevPitch_deg, pitch) * serialRotationScale;
-                float dRoll  = Mathf.DeltaAngle(prevRoll_deg,  roll)  * serialRotationScale;
+                float dYaw   = Mathf.DeltaAngle(prevYaw_deg,   yaw)   * serialRotationScale * yawSign;
+                float dPitch = Mathf.DeltaAngle(prevPitch_deg, pitch) * serialRotationScale * pitchSign;
+                float dRoll  = Mathf.DeltaAngle(prevRoll_deg,  roll)  * serialRotationScale * rollSign;
 
                 prevYaw_deg = yaw; prevPitch_deg = pitch; prevRoll_deg = roll;
                 tool.Rotate(new Vector3(dPitch, dYaw, dRoll), Space.Self);
